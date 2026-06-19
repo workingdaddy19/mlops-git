@@ -14,6 +14,26 @@ echo "  MLFoundry EKS 배포 시작"
 echo "======================================================"
 
 # ─────────────────────────────────────────────
+# STEP 0. 사전 점검 — Secret 파일 존재 확인
+#   실제 값이 담긴 Secret 은 보안상 git 제외(.gitignore)됨.
+# ─────────────────────────────────────────────
+PROD_SECRET="k8s/backend-secret.yaml"
+if [ ! -f "${PROD_SECRET}" ]; then
+  echo ""
+  echo "[준비 필요] ${PROD_SECRET} 가 없습니다 (공개 저장소 보안상 git 제외됨)."
+  if cp k8s/backend-secret.example.yaml "${PROD_SECRET}" 2>/dev/null; then
+    echo "  → 템플릿을 복사했습니다. 아래 파일을 열어 <...> 자리표시자에 실제 값을 채우세요:"
+  else
+    echo "  → 템플릿에서 복사해 실제 값을 채우세요:"
+    echo "       cp k8s/backend-secret.example.yaml ${PROD_SECRET}"
+  fi
+  echo "       vi ${PROD_SECRET}"
+  echo "  그 후 다시 실행: ./deploy_eks.sh"
+  echo ""
+  exit 1
+fi
+
+# ─────────────────────────────────────────────
 # STEP 1. ECR 레포지토리 생성 (이미 있으면 무시)
 # ─────────────────────────────────────────────
 echo ""

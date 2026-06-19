@@ -78,11 +78,12 @@ git clone <repo-url> mlops-git && cd mlops-git
 # 운영
 cp k8s/backend-secret.example.yaml k8s/backend-secret.yaml
 vi k8s/backend-secret.yaml            # <...> 자리표시자를 실제 값으로 교체
-# 개발
+# 개발 (운영과 동일 DB(mlops) 공유 → DB_NAME=mlops, SECRET_KEY는 운영과 동일 값 사용)
 cp k8s/dev/backend-secret-dev.example.yaml k8s/dev/backend-secret-dev.yaml
 vi k8s/dev/backend-secret-dev.yaml
 ```
 > deploy 스크립트가 `k8s/.../backend-secret*.yaml`을 `kubectl apply` 하므로, 위 파일이 서버에 존재해야 합니다.
+> **[중요] dev는 운영과 같은 `mlops` DB를 공유**합니다. 같은 `users` 테이블을 쓰므로 **dev `SECRET_KEY`는 반드시 운영과 동일**해야 로그인이 됩니다(비밀번호 해시가 SECRET_KEY를 salt로 사용). dev/운영이 사용자·권한·쿼리이력 데이터를 공유함에 유의하세요.
 
 ### 2-2. 개발(dev) 배포 — 운영 전 검증
 ```bash
@@ -169,4 +170,4 @@ kubectl delete -f k8s/dev/ -n mlops
 - **공개 저장소 안전 처리**: 실제 비밀값이 담긴 `k8s/backend-secret.yaml`, `k8s/dev/backend-secret-dev.yaml`, `.env` 는 `.gitignore`로 **커밋 제외**됩니다. 저장소에는 자리표시자만 담긴 `*.example.yaml` / `.env.example` 템플릿만 올라갑니다.
 - 서버에서는 §2-1.5처럼 템플릿을 복사해 실제 값을 채워 사용하세요.
 - 더 안전하게 운영하려면 **SealedSecrets / AWS Secrets Manager(External Secrets)** 도입을 권장합니다.
-- dev Secret(`backend-secret-dev`)은 운영 데이터 보호를 위해 **별도 DB(`mlops_dev`)와 별도 `SECRET_KEY`**를 사용하도록 구성했습니다.
+- dev는 운영과 **동일한 `mlops` DB를 공유**합니다(`DB_NAME=mlops`). 같은 `users` 테이블을 쓰므로 dev `SECRET_KEY`는 **운영과 동일 값**이어야 로그인이 정상 동작합니다. dev/운영이 사용자·권한·쿼리이력 데이터를 공유하므로, dev 테스트가 운영 데이터에 영향을 줄 수 있음에 유의하세요.
