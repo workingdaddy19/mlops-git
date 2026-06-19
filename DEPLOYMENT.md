@@ -20,22 +20,17 @@ cp .env.example .env
 `.env`에서 최소 아래 값을 채웁니다(필수): `SECRET_KEY`, `DB_HOST`, `DB_PASSWORD`, `JUPYTERHUB_JWT_SECRET`.
 S3/Athena 기능을 로컬에서 쓰려면 AWS 자격증명(`~/.aws/credentials` 또는 `AWS_*` 환경변수)이 필요합니다.
 
-### 1-A. Windows — 배치 파일 (가장 간단)
-```bat
-start_backend.bat
-```
-- `.venv` 자동 생성 → 의존성 설치 → `uvicorn ... --reload` 실행
-- 접속: **http://localhost:6080**
-
-### 1-B. 수동 (venv + uvicorn) — macOS/Linux/WSL
+### 1-A. venv + uvicorn (Windows / macOS / Linux 공통)
 ```bash
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+# Windows(PowerShell): .venv\Scripts\Activate.ps1
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 6080 --reload
 ```
+- 접속: **http://localhost:6080**
 
-### 1-C. Docker Compose (백엔드 + Jupyter + MLflow 동시)
+### 1-B. Docker Compose (백엔드 + Jupyter + MLflow 동시)
 ```bash
 docker compose up --build backend     # 포탈만
 # 또는 전체 스택
@@ -44,7 +39,7 @@ docker compose up --build
 - 포탈: http://localhost:6080 / Jupyter: http://localhost:6888 / MLflow: http://localhost:6050
 - AWS 자격증명은 `${USERPROFILE}/.aws`를 컨테이너에 read-only 마운트(`docker-compose.yml`)
 
-### 1-D. 동작 확인
+### 1-C. 동작 확인
 ```bash
 curl http://localhost:6080/health        # {"status":"ok",...}
 ```
@@ -125,7 +120,7 @@ dev.mlops.click  CNAME  k8s-sharedalb-0882a5287f-595901001.ap-northeast-2.elb.am
 
 ```
 코드 수정
-  └─ (로컬) start_backend.bat 로 동작 확인
+  └─ (로컬) venv + uvicorn 으로 동작 확인 (§1-A)
        └─ (EC2) ./deploy_eks_dev.sh        # dev ECR + dev Pod 배포
             └─ http://dev.mlops.click 검증
                  └─ (EC2) ./deploy_eks.sh   # 운영 배포
@@ -162,7 +157,6 @@ kubectl delete -f k8s/dev/ -n mlops
 | 파일 | 용도 |
 |------|------|
 | `Dockerfile` / `docker-compose.yml` | 이미지 빌드 / 로컬 스택 |
-| `start_backend.bat` | Windows 로컬 실행 |
 | `build_and_push.sh` / `deploy_eks.sh` | **운영** 빌드·배포 |
 | `build_and_push_dev.sh` / `deploy_eks_dev.sh` | **개발** 빌드·배포 |
 | `k8s/backend-*.yaml` | 운영 매니페스트 |
