@@ -1,0 +1,36 @@
+# ── Python 캐시 ──────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── 환경 설정 (k8s Secret으로 주입) ─────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── 로그/임시 ─────────────────────────────────────────────────
+*.log
+*.tmp
+
+# ── VCS / 개발 도구 ───────────────────────────────────────────
+.git/
+.gitignore
+.claude/
+.bkit/
+.streamlit/
+
+# ── 개발 전용 파일 ────────────────────────────────────────────
+docs/
+libs/
+demo/
+docker/
+docker-compose*.yml
+
+# ── 불필요 파일 ───────────────────────────────────────────────
+alembic.ini
+dbcreate.md
+booterr_*.log
+boot_final.log
+README*.md

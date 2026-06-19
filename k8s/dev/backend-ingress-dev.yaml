@@ -1,0 +1,34 @@
+# ============================================================
+# [개발용] Ingress — dev.mlops.click → svc/mlops-dev:6080
+#  - 운영과 동일한 ALB(group.name: shared-alb)를 공유하고
+#    host 기반으로 라우팅합니다. (운영: mlops.click / 개발: dev.mlops.click)
+#  - DNS: dev.mlops.click 를 운영과 동일한 ALB 주소로
+#    CNAME(또는 Route53 Alias) 등록해야 합니다.
+#      예) dev.mlops.click  CNAME  k8s-sharedalb-0882a5287f-595901001.ap-northeast-2.elb.amazonaws.com
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlops-dev-ingress
+  namespace: mlops
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/group.name: shared-alb
+    alb.ingress.kubernetes.io/group.order: "2"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+spec:
+  ingressClassName: alb
+  rules:
+    - host: dev.mlops.click
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mlops-dev
+                port:
+                  number: 6080

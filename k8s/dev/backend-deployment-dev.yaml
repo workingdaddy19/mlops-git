@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlops-dev
+  namespace: mlops
+  labels:
+    app: mlops-dev
+    env: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops-dev
+  template:
+    metadata:
+      labels:
+        app: mlops-dev
+        env: dev
+    spec:
+      # 운영과 동일한 IRSA ServiceAccount 재사용 (S3/Athena 접근 권한)
+      serviceAccountName: mlops-aws-access
+      containers:
+        - name: mlops-dev
+          # ==========================================
+          # 개발용 ECR 이미지
+          # ==========================================
+          image: 891376975666.dkr.ecr.ap-northeast-2.amazonaws.com/mlops-dev/app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6080
+          envFrom:
+            - secretRef:
+                name: backend-secret-dev
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 6080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 6080
+            initialDelaySeconds: 15
+            periodSeconds: 5

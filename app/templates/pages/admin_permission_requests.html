@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}권한 신청 관리 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>Management</span>
+  <span class="sep">›</span>
+  <span class="current">권한 신청 관리</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:0;">🔑 권한 신청 관리</div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <select id="status-filter" class="form-select" style="padding:4px 10px; font-size:13px;" onchange="loadRequests()">
+        <option value="pending">대기중</option>
+        <option value="approved">승인됨</option>
+        <option value="rejected">거부됨</option>
+        <option value="">전체</option>
+      </select>
+      <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="loadRequests()">🔄 새로고침</button>
+    </div>
+  </div>
+
+  <div id="req-status" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></div>
+
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="req-table">
+      <thead>
+        <tr>
+          <th style="width:140px;">신청 시각</th>
+          <th style="width:140px;">사용자 ID</th>
+          <th style="width:120px;">기능</th>
+          <th>사유</th>
+          <th style="width:90px; text-align:center;">상태</th>
+          <th style="width:170px; text-align:center;">처리</th>
+        </tr>
+      </thead>
+      <tbody id="req-tbody">
+        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FEAT_LABEL = { s3:'S3 스토리지', athena:'Athena DB', jupyter:'Jupyter', mlflow:'MLFlow', airflow:'Airflow' };
+const STATUS_STYLE = {
+  pending:  { text: '대기중', bg: '#fef3c7', fg: '#92400e' },
+  approved: { text: '승인',   bg: '#d1fae5', fg: '#065f46' },
+  rejected: { text: '거부',   bg: '#fee2e2', fg: '#991b1b' },
+};
+
+document.addEventListener('DOMContentLoaded', loadRequests);
+
+async function loadRequests() {
+  const tbody = document.getElementById('req-tbody');
+  const statusEl = document.getElementById('req-status');
+  const filter = document.getElementById('status-filter').value;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">로딩 중...</td></tr>';
+
+  const url = '/api/admin/permission-requests' + (filter ? `?status=${filter}` : '');
+  const res = await apiFetch(url);
+  if (!res) return;
+  if (res.status === 403) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#ef4444; padding:24px;">⛔ 관리자 권한이 필요합니다.</td></tr>';
+    return;
+  }
+  if (!res.ok) { statusEl.textContent = '조회 실패'; return; }
+
+  const items = await res.json();
+  statusEl.textContent = `${items.length}건`;
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">신청 내역이 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = items.map(r => {
+    const st = STATUS_STYLE[r.status] || STATUS_STYLE.pending;
+    const action = r.status === 'pending'
+      ? `<button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="decide(${r.id},'approve')">승인</button>
+         <button class="btn btn-danger" style="padding:4px 10px; font-size:12px; margin-left:4px;" onclick="decide(${r.id},'reject')">거부</button>`
+      : `<span style="font-size:12px; color:var(--text-muted);">${escapeHtml(r.decided_by || '')}<br>${fmtTime(r.decided_at)}</span>`;
+    return `
+      <tr>
+        <td style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${fmtTime(r.requested_at)}</td>
+        <td><strong>${escapeHtml(r.username)}</strong> <span style="color:var(--text-muted); font-size:11px;">#${r.user_id}</span></td>
+        <td>${escapeHtml(FEAT_LABEL[r.feature] || r.feature)}</td>
+        <td style="font-size:12px;">${escapeHtml(r.reason || '')}</td>
+        <td style="text-align:center;">
+          <span style="font-size:11px; padding:2px 8px; border-radius:99px; background:${st.bg}; color:${st.fg}; font-weight:600;">${st.text}</span>
+        </td>
+        <td style="text-align:center;">${action}</td>
+      </tr>`;
+  }).join('');
+}
+
+async function decide(id, action) {
+  const label = action === 'approve' ? '승인' : '거부';
+  if (!confirm(`이 신청을 ${label}하시겠습니까?`)) return;
+  const res = await apiFetch(`/api/admin/permission-requests/${id}/${action}`, { method: 'POST' });
+  if (!res) return;
+  if (res.ok) {
+    showToast(`${label} 처리되었습니다.`, 'success');
+    loadRequests();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || '처리 실패', 'error');
+  }
+}
+
+function fmtTime(s) {
+  return s ? String(s).replace('T', ' ').slice(0, 19) : '';
+}
+function showToast(msg, type = 'info') {
+  const bg = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#1e293b';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;`
+    + `padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 3000);
+}
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

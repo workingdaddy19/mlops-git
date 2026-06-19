@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}권한 신청 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>Account</span>
+  <span class="sep">›</span>
+  <span class="current">권한 신청</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title" style="margin-bottom:6px;">🔑 기능 권한 신청</div>
+  <div style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+    사용하려는 기능의 권한을 신청하면 관리자 승인 후 이용할 수 있습니다.
+  </div>
+
+  <div id="admin-note" style="display:none; padding:12px 14px; border-radius:8px; background:#ecfdf5; color:#065f46; font-size:13px;">
+    ✓ 관리자 계정은 모든 기능이 자동으로 허용되어 별도 신청이 필요 없습니다.
+  </div>
+
+  <div id="feature-cards" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px;">
+    <div style="color:var(--text-muted); font-size:13px;">로딩 중...</div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <div class="card-title" style="margin-bottom:0;">📋 내 신청 내역</div>
+    <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="loadAll()">🔄 새로고침</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="req-table">
+      <thead>
+        <tr>
+          <th style="width:140px;">신청 시각</th>
+          <th style="width:120px;">기능</th>
+          <th>사유</th>
+          <th style="width:90px; text-align:center;">상태</th>
+          <th style="width:140px;">처리(관리자/시각)</th>
+        </tr>
+      </thead>
+      <tbody id="req-tbody">
+        <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">불러오는 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 신청 모달 -->
+<div class="modal-overlay" id="reqModal">
+  <div class="modal-box">
+    <div class="modal-title">권한 신청</div>
+    <div class="form-group">
+      <label class="form-label">기능</label>
+      <input id="r-feature-label" class="form-input" disabled style="opacity:0.7;">
+      <input type="hidden" id="r-feature">
+    </div>
+    <div class="form-group">
+      <label class="form-label">신청 사유 (선택)</label>
+      <textarea id="r-reason" class="form-input" style="height:80px; resize:vertical;"
+        placeholder="예: 모델 학습 데이터 분석을 위해 필요합니다." maxlength="500"></textarea>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+      <button class="btn btn-secondary" onclick="closeReqModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitRequest()">신청</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FEATURES = [
+  { key: 's3',      label: 'S3 스토리지', icon: '🗄️' },
+  { key: 'athena',  label: 'Athena DB',  icon: '📊' },
+  { key: 'jupyter', label: 'Jupyter',    icon: '📓' },
+  { key: 'mlflow',  label: 'MLFlow',     icon: '🧪' },
+  { key: 'airflow', label: 'Airflow',    icon: '🌀' },
+];
+const FEAT_LABEL = Object.fromEntries(FEATURES.map(f => [f.key, f.label]));
+const STATUS_STYLE = {
+  pending:  { text: '대기중', bg: '#fef3c7', fg: '#92400e' },
+  approved: { text: '승인',   bg: '#d1fae5', fg: '#065f46' },
+  rejected: { text: '거부',   bg: '#fee2e2', fg: '#991b1b' },
+};
+
+let myPerms = [];
+let myRequests = [];
+
+document.addEventListener('DOMContentLoaded', loadAll);
+
+async function loadAll() {
+  const me = Auth.getUser();
+  const isAdmin = !!(me && me.role === 'admin');
+  document.getElementById('admin-note').style.display = isAdmin ? 'block' : 'none';
+
+  // 보유 권한
+  const permRes = await apiFetch('/api/auth/me/permissions');
+  myPerms = (permRes && permRes.ok) ? await permRes.json() : [];
+
+  // 내 신청 내역
+  const reqRes = await apiFetch('/api/permissions/requests/me');
+  myRequests = (reqRes && reqRes.ok) ? await reqRes.json() : [];
+
+  renderCards(isAdmin);
+  renderRequests();
+}
+
+function pendingFeatures() {
+  return new Set(myRequests.filter(r => r.status === 'pending').map(r => r.feature));
+}
+
+function renderCards(isAdmin) {
+  const wrap = document.getElementById('feature-cards');
+  const pend = pendingFeatures();
+  wrap.innerHTML = FEATURES.map(f => {
+    const granted = isAdmin || myPerms.includes(f.key);
+    const isPending = pend.has(f.key);
+    let badge, btn;
+    if (granted) {
+      badge = '<span style="font-size:11px; color:#10b981; font-weight:600;">✓ 보유</span>';
+      btn = '';
+    } else if (isPending) {
+      badge = '<span style="font-size:11px; color:#92400e; font-weight:600;">⏳ 승인 대기</span>';
+      btn = `<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" disabled>신청됨</button>`;
+    } else {
+      badge = '<span style="font-size:11px; color:var(--text-muted);">미보유</span>';
+      btn = `<button class="btn btn-primary" style="padding:4px 10px; font-size:12px;"
+        onclick="openReqModal('${f.key}')">신청</button>`;
+    }
+    return `
+      <div style="border:1px solid var(--border); border-radius:8px; padding:14px;">
+        <div style="font-size:22px; margin-bottom:6px;">${f.icon}</div>
+        <div style="font-weight:600; margin-bottom:4px;">${escapeHtml(f.label)}</div>
+        <div style="margin-bottom:10px;">${badge}</div>
+        ${btn}
+      </div>`;
+  }).join('');
+}
+
+function renderRequests() {
+  const tbody = document.getElementById('req-tbody');
+  if (myRequests.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">신청 내역이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = myRequests.map(r => {
+    const st = STATUS_STYLE[r.status] || STATUS_STYLE.pending;
+    const decided = r.decided_at
+      ? `${escapeHtml(r.decided_by || '')}<br><span style="font-size:11px; color:var(--text-muted);">${fmtTime(r.decided_at)}</span>`
+      : '<span style="color:var(--text-muted);">-</span>';
+    return `
+      <tr>
+        <td style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${fmtTime(r.requested_at)}</td>
+        <td>${escapeHtml(FEAT_LABEL[r.feature] || r.feature)}</td>
+        <td style="font-size:12px;">${escapeHtml(r.reason || '')}</td>
+        <td style="text-align:center;">
+          <span style="font-size:11px; padding:2px 8px; border-radius:99px; background:${st.bg}; color:${st.fg}; font-weight:600;">${st.text}</span>
+        </td>
+        <td style="font-size:12px;">${decided}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ── 신청 모달 ───────────────────────────────────────────────
+function openReqModal(feature) {
+  document.getElementById('r-feature').value = feature;
+  document.getElementById('r-feature-label').value = FEAT_LABEL[feature] || feature;
+  document.getElementById('r-reason').value = '';
+  document.getElementById('reqModal').classList.add('open');
+}
+function closeReqModal() {
+  document.getElementById('reqModal').classList.remove('open');
+}
+
+async function submitRequest() {
+  const feature = document.getElementById('r-feature').value;
+  const reason  = document.getElementById('r-reason').value.trim() || null;
+  const res = await apiFetch('/api/permissions/requests', {
+    method: 'POST',
+    body: JSON.stringify({ feature, reason }),
+  });
+  if (!res) return;
+  if (res.ok || res.status === 201) {
+    closeReqModal();
+    showToast('권한을 신청했습니다. 관리자 승인을 기다려주세요.', 'success');
+    loadAll();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || '신청 실패', 'error');
+  }
+}
+
+// ── 유틸 ────────────────────────────────────────────────────
+function fmtTime(s) {
+  return s ? String(s).replace('T', ' ').slice(0, 19) : '';
+}
+function showToast(msg, type = 'info') {
+  const bg = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#1e293b';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;`
+    + `padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 3000);
+}
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
+});
+</script>
+{% endblock %}
