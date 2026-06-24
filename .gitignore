@@ -28,6 +28,8 @@ k8s/dev/backend-secret-dev.yaml
 .claude/
 .pdca-status.json
 .streamlit/
+# 로컬 Windows 실행 편의 스크립트 (서버 배포 불필요 · 개인 PC 경로 종속)
+start_backend.bat
 
 # ===========================================================
 #  IDE / OS
