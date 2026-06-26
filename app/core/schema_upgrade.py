@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 _ADDED_COLUMNS = [
     ("users", "department", "VARCHAR(100)"),
     ("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT {false}"),
+    ("resource_ledgers", "request_note", "VARCHAR(500)"),
+    ("resource_ledgers", "assigned_to", "VARCHAR(50)"),
+    ("resource_ledgers", "starts_at", "DATE"),
+    ("capacity_estimates", "status", "VARCHAR(20) NOT NULL DEFAULT 'pending'"),
 ]
 
 

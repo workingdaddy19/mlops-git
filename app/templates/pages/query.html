@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const runBtn = document.querySelector('button[onclick="runAthenaQuery()"]');
     if (runBtn) { runBtn.disabled = true; runBtn.title = '관리자에게 Athena 권한을 요청하세요.'; }
     document.getElementById('athena-status').innerHTML =
-      '<span style="color:#ef4444;">⛔ Athena DB 접근 권한이 없습니다.</span>';
+      '<span style="color:#ef4444;">⛔ 데이터조회(Athena) 접근 권한이 없습니다.</span>';
     document.getElementById('athena-tree').innerHTML =
       '<div style="padding:8px 12px; font-size:12px; color:#ef4444;">권한 없음</div>';
   } else {

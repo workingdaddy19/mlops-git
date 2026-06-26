@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     jupyterhub_admin_token: str = Field(default="", alias="JUPYTERHUB_ADMIN_TOKEN")
     jupyterhub_jwt_secret: str = Field(default="", alias="JUPYTERHUB_JWT_SECRET")
     jupyter_envs: str = Field(
-        default='[{"name":"CPU 환경","server":""},{"name":"GPU 환경","server":"gpu"}]',
+        # 자원 프로파일 카탈로그 — 사양(vcpu/mem_gb/gpu)은 JupyterHub profile_list와 매칭(인프라 구성 전제).
+        default='[{"name":"CPU 환경","server":"","vcpu":4,"mem_gb":16,"gpu":0},'
+                '{"name":"GPU 환경","server":"gpu","vcpu":8,"mem_gb":32,"gpu":1}]',
         alias="JUPYTER_ENVS",
     )
 
@@ -56,11 +58,6 @@ class Settings(BaseSettings):
     # 도메인 등록 전 ALB Host 라우팅 우회용 (현재는 불필요 → 기본 빈 값)
     inference_default_host: str = Field(default="", alias="INFERENCE_DEFAULT_HOST")
     inference_allowed_hosts: list[str] = Field(default_factory=list, alias="INFERENCE_ALLOWED_HOSTS")
-
-    # ── Airflow ────────────────────────────────────────────────────────
-    airflow_base_url: str = Field(default="http://airflow.mlops.click", alias="AIRFLOW_BASE_URL")
-    airflow_username: str = Field(default="admin", alias="AIRFLOW_USERNAME")
-    airflow_password: SecretStr = Field(default=SecretStr(""), alias="AIRFLOW_PASSWORD")
 
     streamlit_port: int = Field(default=6501, alias="STREAMLIT_PORT")
 

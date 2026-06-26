@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db, require_admin
 from app.api.routes.access_log import record_event
 from app.core.config import get_settings
-from app.core.security import hash_password, validate_password_strength
+from app.core.security import hash_password
 from app.models.user import User
 from app.models.user_permission import VALID_FEATURES
 from app.repositories.settings_repo import SettingsRepository
@@ -60,10 +60,6 @@ class UserUpdate(BaseModel):
     name: str | None = None
     department: str | None = None
     role: str | None = None
-
-
-class PasswordReset(BaseModel):
-    new_password: str
 
 
 class SettingUpdate(BaseModel):
@@ -155,25 +151,19 @@ def update_user(
 @router.put("/users/{user_id}/password")
 def reset_user_password(
     user_id: int,
-    body: PasswordReset,
     request: Request,
     db: Session = Depends(get_db),
     admin: UserRead = Depends(require_admin),
 ):
-    """사용자 비밀번호 초기화 (admin only). 초기화 후 다음 로그인 시 변경 강제."""
+    """사용자 비밀번호 초기화 (admin only). 초기화 비밀번호 = 아이디(username)."""
     repo = UserRepository(db)
     user = repo.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
-    try:
-        validate_password_strength(body.new_password)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
     secret_key = get_settings().secret_key.get_secret_value()
-    user.password_hash = hash_password(body.new_password, user.username, secret_key)
-    user.must_change_password = True
+    user.password_hash = hash_password(user.username, user.username, secret_key)  # 비번 = 아이디
+    user.must_change_password = False  # 강제 변경 미사용
     db.commit()
 
     record_event(
@@ -181,7 +171,7 @@ def reset_user_password(
         name=user.name, department=user.department,
         menu=f"비밀번호 초기화(by {admin.username})", action="password_reset",
     )
-    return {"message": f"'{user.username}' 사용자의 비밀번호가 초기화되었습니다. 다음 로그인 시 변경이 필요합니다."}
+    return {"message": f"'{user.username}' 비밀번호가 아이디와 동일하게 초기화되었습니다."}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}S3 스토리지 - MLFoundry{% endblock %}
+{% block title %}저장소 (S3) - MLFoundry{% endblock %}
 
 {% block breadcrumb %}
-  <span>S3 스토리지</span>
+  <span>저장소 (S3)</span>
   <span class="sep">›</span>
   <span class="current" id="breadcrumb-path">루트</span>
 {% endblock %}
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tree.style.opacity = '0.4';
     document.getElementById('file-list').innerHTML =
       '<tr><td colspan="4" style="text-align:center; padding:60px; color:#ef4444;">' +
-      '⛔ S3 스토리지 접근 권한이 없습니다. 관리자에게 문의하세요.</td></tr>';
+      '⛔ 저장소 (S3) 접근 권한이 없습니다. 관리자에게 문의하세요.</td></tr>';
     document.getElementById('current-path-display').textContent = '권한 없음';
     return;
   }

@@ -15,7 +15,7 @@
 <div class="card" style="margin-bottom:16px;">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
     <div class="card-title" id="proj-title" style="margin-bottom:0;">과제 정보</div>
-    <div style="display:flex; gap:8px; align-items:center;">
+    <div id="proj-status-wrap" style="display:flex; gap:8px; align-items:center;">
       <label style="font-size:12px; color:var(--text-muted);">상태</label>
       <select id="proj-status-sel" class="form-select" style="padding:4px 10px; font-size:13px;" onchange="changeProjectStatus()">
         <option value="planning">계획</option>
@@ -47,7 +47,7 @@
       <thead>
         <tr>
           <th style="width:80px;">상태</th>
-          <th>네임스페이스 / 노드</th>
+          <th>대상 / 기간</th>
           <th style="width:140px;">용량</th>
           <th style="width:110px;">ITSM</th>
           <th style="width:160px;">만료</th>
@@ -112,20 +112,20 @@
     <div class="modal-title" id="ledger-modal-title">자원 배분 등록</div>
     <input type="hidden" id="l-id">
     <div style="display:flex; gap:10px;">
-      <div class="form-group" style="flex:1;"><label class="form-label">네임스페이스</label><input id="l-ns" class="form-input" placeholder="예: prj-churn"></div>
-      <div class="form-group" style="flex:1;"><label class="form-label">노드그룹</label><input id="l-ng" class="form-input" placeholder="예: ng-analysis-r6i"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">대상 사용자 *</label><input id="l-assigned" class="form-input" placeholder="아이디"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">환경(named server)</label><input id="l-jst" class="form-input" placeholder="예: gpu (비우면 기본)"></div>
     </div>
-    <div class="form-group"><label class="form-label">Jupyter 서버 유형</label><input id="l-jst" class="form-input" placeholder="예: r6i.2xlarge (8vCPU/64GB)"></div>
     <div style="display:flex; gap:10px;">
-      <div class="form-group" style="flex:1;"><label class="form-label">vCPU</label><input id="l-vcpu" class="form-input" type="number" step="0.5" placeholder="8"></div>
-      <div class="form-group" style="flex:1;"><label class="form-label">메모리(GB)</label><input id="l-mem" class="form-input" type="number" step="1" placeholder="64"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">vCPU *</label><input id="l-vcpu" class="form-input" type="number" step="0.5" placeholder="8"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">메모리(GB) *</label><input id="l-mem" class="form-input" type="number" step="1" placeholder="64"></div>
       <div class="form-group" style="flex:1;"><label class="form-label">GPU</label><input id="l-gpu" class="form-input" type="number" step="1" placeholder="0"></div>
     </div>
     <div style="display:flex; gap:10px;">
+      <div class="form-group" style="flex:1;"><label class="form-label">시작일 *</label><input id="l-starts" class="form-input" type="date"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">만료일 *</label><input id="l-expire" class="form-input" type="date"></div>
       <div class="form-group" style="flex:1;"><label class="form-label">ITSM 티켓</label><input id="l-itsm" class="form-input" placeholder="ITSM-12345"></div>
-      <div class="form-group" style="flex:1;"><label class="form-label">배분일</label><input id="l-alloc" class="form-input" type="date"></div>
-      <div class="form-group" style="flex:1;"><label class="form-label">만료일</label><input id="l-expire" class="form-input" type="date"></div>
     </div>
+    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 네임스페이스·노드그룹 등 인프라 배치는 인프라팀이 프로비저닝 시 지정합니다. 승인된 산정서 한도 내에서만 active 전환됩니다.</p>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
       <button class="btn btn-secondary" onclick="closeLedgerModal()">취소</button>
       <button class="btn btn-primary" onclick="submitLedger()">저장</button>
@@ -137,6 +137,8 @@
 {% block scripts %}
 <script>
 const PROJECT_ID = {{ project_id }};
+const IS_ADMIN = !!(Auth.getUser() && Auth.getUser().role === 'admin');
+const ME = (Auth.getUser() || {}).username || '';
 
 const LEDGER_NEXT = {
   draft:['submitted'], submitted:['approved','draft'], approved:['active','submitted'],
@@ -162,6 +164,7 @@ async function loadDetail() {
   document.getElementById('bc-code').textContent = p.code;
   document.getElementById('proj-title').textContent = `${p.code} · ${p.name}`;
   document.getElementById('proj-status-sel').value = p.status;
+  document.getElementById('proj-status-wrap').style.display = IS_ADMIN ? 'flex' : 'none';  // 상태변경은 admin
 
   const sec = {none:'미협의', requested:'협의요청', done:'협의완료'}[p.security_review_status] || p.security_review_status;
   document.getElementById('proj-info').innerHTML = `
@@ -201,9 +204,13 @@ function renderEstimates(list) {
             <b style="color:#0d9488;">Peak ${fmtNum(e.derived_peak_memory_gb)}GB</b> · <b>${fmtNum(e.derived_peak_vcpu)} vCPU</b>
             ${e.recommended_node?` · 권장: ${escapeHtml(e.recommended_node)}`:''}
           </div>
-          <div style="font-size:11px;color:var(--text-muted);">
+          <div style="font-size:11px;color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+            ${e.status==='approved'
+              ? '<span style="padding:2px 8px;border-radius:99px;background:#d1fae5;color:#065f46;font-weight:600;">승인됨</span>'
+              : '<span style="padding:2px 8px;border-radius:99px;background:#e2e8f0;color:#475569;font-weight:600;">미승인</span>'}
             ${e.estimated_by?escapeHtml(e.estimated_by)+' · ':''}${fmtTime(e.created_at)}
-            <button class="btn btn-danger" style="padding:2px 8px;font-size:11px;margin-left:8px;" onclick="deleteEstimate(${e.id})">삭제</button>
+            ${(IS_ADMIN && e.status!=='approved') ? `<button class="btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="approveEstimate(${e.id})">승인</button>` : ''}
+            ${(IS_ADMIN || e.status!=='approved') ? `<button class="btn btn-danger" style="padding:2px 8px;font-size:11px;" onclick="deleteEstimate(${e.id})">삭제</button>` : ''}
           </div>
         </div>
         ${e.dataset_summary?`<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${escapeHtml(e.dataset_summary)}</div>`:''}
@@ -220,21 +227,24 @@ function renderLedgers(list) {
   tbody.innerHTML = list.map(l => {
     const st = LSTATUS[l.status] || {t:l.status,bg:'#e2e8f0',fg:'#475569'};
     const cap = `${fmtNum(l.alloc_vcpu)}vCPU / ${fmtNum(l.alloc_mem_gb)}GB${l.alloc_gpu?` / GPU${l.alloc_gpu}`:''}`;
-    const transitions = (LEDGER_NEXT[l.status]||[]).map(to => {
+    const nexts = (LEDGER_NEXT[l.status]||[]).filter(to => IS_ADMIN || ['submitted','draft'].includes(to));
+    const transitions = nexts.map(to => {
       const danger = (to==='reclaimed'||to==='reclaim_pending');
-      return `<button class="btn ${danger?'btn-danger':'btn-secondary'}" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="transition(${l.id},'${to}')">${TRANS_LABEL[to]||to}</button>`;
+      const lbl = (!IS_ADMIN && to==='draft') ? '철회' : (TRANS_LABEL[to]||to);
+      return `<button class="btn ${danger?'btn-danger':'btn-secondary'}" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="transition(${l.id},'${to}')">${lbl}</button>`;
     }).join('');
+    const canEdit = IS_ADMIN || ['draft','submitted'].includes(l.status);
     return `
       <tr>
         <td><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:${st.bg};color:${st.fg};font-weight:600;white-space:nowrap;">${st.t}</span></td>
-        <td style="font-size:12px;">${escapeHtml(l.namespace||'-')}<br><span style="color:var(--text-muted);">${escapeHtml(l.node_group||'')} ${escapeHtml(l.jupyter_server_type||'')}</span></td>
+        <td style="font-size:12px;">👤 ${escapeHtml(l.assigned_to||'-')}<br><span style="color:var(--text-muted);">${l.starts_at||'?'} ~ ${l.expires_at||'?'} ${escapeHtml(l.jupyter_server_type||'')}</span></td>
         <td style="font-size:12px;">${cap}</td>
         <td style="font-size:12px;">${escapeHtml(l.itsm_ticket||'-')}</td>
         <td style="font-size:12px;">${expiryBadge(l)}</td>
         <td>
           ${transitions}
-          <button class="btn btn-secondary" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="editLedger(${l.id})">수정</button>
-          <button class="btn btn-danger" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="deleteLedger(${l.id})">삭제</button>
+          ${canEdit ? `<button class="btn btn-secondary" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="editLedger(${l.id})">수정</button>
+          <button class="btn btn-danger" style="padding:3px 9px;font-size:11px;margin:1px;" onclick="deleteLedger(${l.id})">삭제</button>` : ''}
         </td>
       </tr>`;
   }).join('');
@@ -313,6 +323,14 @@ async function submitEstimate() {
   else { const e = await res.json().catch(()=>({})); showToast(e.detail || '저장 실패', 'error'); }
 }
 
+async function approveEstimate(id) {
+  if (!confirm('이 산정서를 승인하시겠습니까? 승인 후 이 한도 내에서 자원 배분이 가능합니다.')) return;
+  const res = await apiFetch(`/api/resource/estimates/${id}/approve`, { method:'POST', body: '{}' });
+  if (!res) return;
+  if (res.ok) { showToast('산정서가 승인되었습니다.', 'success'); loadDetail(); }
+  else { const e = await res.json().catch(()=>({})); showToast(e.detail || '승인 실패', 'error'); }
+}
+
 async function deleteEstimate(id) {
   if (!confirm('이 산정서를 삭제하시겠습니까?')) return;
   const res = await apiFetch(`/api/resource/estimates/${id}`, { method:'DELETE' });
@@ -322,7 +340,8 @@ async function deleteEstimate(id) {
 // ── 자원대장 모달 ─────────────────────────────────────────────
 function openLedgerModal() {
   document.getElementById('ledger-modal-title').textContent = '자원 배분 등록';
-  ['l-id','l-ns','l-ng','l-jst','l-vcpu','l-mem','l-gpu','l-itsm','l-alloc','l-expire'].forEach(id=>document.getElementById(id).value='');
+  ['l-id','l-assigned','l-jst','l-vcpu','l-mem','l-gpu','l-itsm','l-starts','l-expire'].forEach(id=>document.getElementById(id).value='');
+  if (!IS_ADMIN) document.getElementById('l-assigned').value = ME;  // 사용자는 본인 기본
   document.getElementById('ledgerModal').classList.add('open');
 }
 function closeLedgerModal(){ document.getElementById('ledgerModal').classList.remove('open'); }
@@ -335,30 +354,37 @@ async function editLedger(id) {
   if (!l) return;
   document.getElementById('ledger-modal-title').textContent = '자원 배분 수정';
   document.getElementById('l-id').value = l.id;
-  document.getElementById('l-ns').value = l.namespace||'';
-  document.getElementById('l-ng').value = l.node_group||'';
+  document.getElementById('l-assigned').value = l.assigned_to||'';
   document.getElementById('l-jst').value = l.jupyter_server_type||'';
   document.getElementById('l-vcpu').value = l.alloc_vcpu??'';
   document.getElementById('l-mem').value = l.alloc_mem_gb??'';
   document.getElementById('l-gpu').value = l.alloc_gpu??'';
   document.getElementById('l-itsm').value = l.itsm_ticket||'';
-  document.getElementById('l-alloc').value = l.allocated_at||'';
+  document.getElementById('l-starts').value = l.starts_at||'';
   document.getElementById('l-expire').value = l.expires_at||'';
   document.getElementById('ledgerModal').classList.add('open');
 }
 
 async function submitLedger() {
   const id = document.getElementById('l-id').value;
+  const assigned = document.getElementById('l-assigned').value.trim();
+  const starts = document.getElementById('l-starts').value;
+  const expire = document.getElementById('l-expire').value;
+  const vcpu = document.getElementById('l-vcpu').value;
+  const mem = document.getElementById('l-mem').value;
+  if (!assigned) { alert('대상 사용자는 필수입니다.'); return; }
+  if (!vcpu || !mem) { alert('vCPU·메모리 용량은 필수입니다.'); return; }
+  if (!starts || !expire) { alert('시작일과 만료일은 필수입니다.'); return; }
   const body = {
-    namespace: document.getElementById('l-ns').value.trim() || null,
-    node_group: document.getElementById('l-ng').value.trim() || null,
+    assigned_to: assigned,
     jupyter_server_type: document.getElementById('l-jst').value.trim() || null,
-    alloc_vcpu: parseFloat(document.getElementById('l-vcpu').value) || null,
-    alloc_mem_gb: parseFloat(document.getElementById('l-mem').value) || null,
+    alloc_vcpu: parseFloat(vcpu) || null,
+    alloc_mem_gb: parseFloat(mem) || null,
     alloc_gpu: parseInt(document.getElementById('l-gpu').value,10) || null,
     itsm_ticket: document.getElementById('l-itsm').value.trim() || null,
-    allocated_at: document.getElementById('l-alloc').value || null,
-    expires_at: document.getElementById('l-expire').value || null,
+    starts_at: starts || null,
+    expires_at: expire || null,
+    allocated_at: new Date().toISOString().slice(0,10),
   };
   const url = id ? `/api/resource/ledgers/${id}` : `/api/resource/projects/${PROJECT_ID}/ledgers`;
   const res = await apiFetch(url, { method: id ? 'PUT':'POST', body: JSON.stringify(body) });

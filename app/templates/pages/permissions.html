@@ -47,6 +47,50 @@
   </div>
 </div>
 
+<!-- 내 분석 과제 자원 대장 -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <div class="card-title" style="margin-bottom:0;">📒 내 분석 과제 자원 대장 (배분 / 라이프사이클)</div>
+    <button class="btn btn-primary" style="padding:5px 12px; font-size:13px;" onclick="openResReqModal()">+ 자원 배분 신청</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>과제</th>
+          <th style="width:90px;">대상</th>
+          <th style="width:150px;">용량</th>
+          <th style="width:170px;">기간</th>
+          <th style="width:90px; text-align:center;">상태</th>
+        </tr>
+      </thead>
+      <tbody id="res-tbody"><tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">불러오는 중...</td></tr></tbody>
+    </table>
+  </div>
+  <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+    ※ 자원 배분은 <strong>승인된 용량 산정서 한도 내</strong>에서 관리자 승인 후 활성화됩니다. 산정서 작성·상세는 <a href="/resource/projects" style="color:var(--primary);">분석 과제</a>에서.
+  </div>
+</div>
+
+<!-- 자원 배분 신청 모달 -->
+<div class="modal-overlay" id="resReqModal">
+  <div class="modal-box" style="width:460px; max-width:95vw;">
+    <div class="modal-title">자원 배분 신청</div>
+    <div class="form-group"><label class="form-label">분석 과제 *</label><select id="rr-project" class="form-select"></select></div>
+    <div class="form-group"><label class="form-label">자원 프로파일(용량) *</label><select id="rr-profile" class="form-select"></select></div>
+    <div style="display:flex; gap:10px;">
+      <div class="form-group" style="flex:1;"><label class="form-label">사용 시작일 *</label><input id="rr-start" class="form-input" type="date"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">사용 종료일 *</label><input id="rr-end" class="form-input" type="date"></div>
+    </div>
+    <div class="form-group"><label class="form-label">신청 사유</label><textarea id="rr-note" class="form-input" rows="2" placeholder="예: 3개월 딥러닝 학습"></textarea></div>
+    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 신청은 <strong>승인 대기</strong>로 등록되며 관리자 승인 후 사용할 수 있습니다.</p>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+      <button class="btn btn-secondary" onclick="closeResReqModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitResReq()">신청</button>
+    </div>
+  </div>
+</div>
+
 <!-- 신청 모달 -->
 <div class="modal-overlay" id="reqModal">
   <div class="modal-box">
@@ -72,11 +116,9 @@
 {% block scripts %}
 <script>
 const FEATURES = [
-  { key: 's3',      label: 'S3 스토리지', icon: '🗄️' },
-  { key: 'athena',  label: 'Athena DB',  icon: '📊' },
-  { key: 'jupyter', label: 'Jupyter',    icon: '📓' },
-  { key: 'mlflow',  label: 'Experiments & Pipelines', icon: '🧪' },
-  { key: 'airflow', label: 'Airflow',    icon: '🌀' },
+  { key: 's3',      label: '저장소 (S3)', icon: '🗄️' },
+  { key: 'athena',  label: '데이터조회(Athena)',  icon: '📊' },
+  { key: 'jupyter', label: '분석기(Jupyter)',    icon: '📓' },
 ];
 const FEAT_LABEL = Object.fromEntries(FEATURES.map(f => [f.key, f.label]));
 const STATUS_STYLE = {
@@ -105,7 +147,84 @@ async function loadAll() {
 
   renderCards(isAdmin);
   renderRequests();
+  loadMyLedgers();
 }
+
+// ── 내 자원 대장 ────────────────────────────────────────────
+const LSTATUS = {
+  draft:{t:'작성',bg:'#e2e8f0',fg:'#475569'}, submitted:{t:'제출',bg:'#dbeafe',fg:'#1d4ed8'},
+  approved:{t:'승인',bg:'#ede9fe',fg:'#5b21b6'}, active:{t:'활성',bg:'#d1fae5',fg:'#065f46'},
+  reclaim_pending:{t:'회수대기',bg:'#fed7aa',fg:'#9a3412'}, reclaimed:{t:'회수완료',bg:'#e2e8f0',fg:'#475569'},
+};
+let RR_PROFILES = [];
+
+async function loadMyLedgers() {
+  const tbody = document.getElementById('res-tbody');
+  const res = await apiFetch('/api/resource/my-ledgers');
+  if (!res || !res.ok) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">조회 실패</td></tr>`; return; }
+  const list = await res.json();
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">자원 대장이 없습니다. '자원 배분 신청'으로 요청하세요.</td></tr>`; return; }
+  tbody.innerHTML = list.map(l => {
+    const st = LSTATUS[l.status] || {t:l.status,bg:'#e2e8f0',fg:'#475569'};
+    const cap = `${fmtNum(l.alloc_vcpu)}vCPU / ${fmtNum(l.alloc_mem_gb)}GB${l.alloc_gpu?` / GPU${l.alloc_gpu}`:''}`;
+    const period = `${l.starts_at||'?'} ~ ${l.expires_at||'?'}`;
+    return `<tr>
+      <td style="font-size:12px;"><a href="/resource/projects/${l.project_id}" style="font-weight:600;">${escapeHtml(l.project_name||'-')}</a><br><span style="color:var(--text-muted);font-family:monospace;">${escapeHtml(l.project_code||'')}</span></td>
+      <td style="font-size:12px;">${escapeHtml(l.assigned_to||'-')}</td>
+      <td style="font-size:12px;">${cap}</td>
+      <td style="font-size:12px;">${period}</td>
+      <td style="text-align:center;"><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:${st.bg};color:${st.fg};font-weight:600;">${st.t}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function openResReqModal() {
+  // 내 과제 + 프로파일 로드
+  const [pRes, prRes] = await Promise.all([
+    apiFetch('/api/resource/projects/mine'),
+    apiFetch('/api/resource/profiles'),
+  ]);
+  const projects = (pRes && pRes.ok) ? await pRes.json() : [];
+  RR_PROFILES = (prRes && prRes.ok) ? await prRes.json() : [];
+  if (!projects.length) { showToast('등록된 분석 과제가 없습니다. 분석 과제를 먼저 등록하세요.', 'error'); return; }
+  document.getElementById('rr-project').innerHTML = projects.map(p =>
+    `<option value="${p.id}">${escapeHtml(p.code)} · ${escapeHtml(p.name)}</option>`).join('');
+  document.getElementById('rr-profile').innerHTML = RR_PROFILES.map(p => {
+    const spec = [p.vcpu!=null?`${p.vcpu} vCPU`:null, p.mem_gb!=null?`${p.mem_gb} GB`:null, p.gpu?`GPU ${p.gpu}`:null].filter(Boolean).join(' / ');
+    return `<option value="${escapeAttr(p.server)}">${escapeHtml(p.name)}${spec?' · '+spec:''}</option>`;
+  }).join('');
+  document.getElementById('rr-start').value = '';
+  document.getElementById('rr-end').value = '';
+  document.getElementById('rr-note').value = '';
+  document.getElementById('resReqModal').classList.add('open');
+}
+function closeResReqModal() { document.getElementById('resReqModal').classList.remove('open'); }
+
+async function submitResReq() {
+  const pid = document.getElementById('rr-project').value;
+  const start = document.getElementById('rr-start').value;
+  const end = document.getElementById('rr-end').value;
+  if (!pid) { alert('분석 과제를 선택하세요.'); return; }
+  if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
+  if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+  const body = {
+    profile_server: document.getElementById('rr-profile').value,
+    period_start: start, period_end: end,
+    request_note: document.getElementById('rr-note').value.trim() || null,
+  };
+  const res = await apiFetch(`/api/resource/projects/${pid}/resource-request`, { method:'POST', body: JSON.stringify(body) });
+  if (!res) return;
+  if (res.ok || res.status === 201) {
+    closeResReqModal();
+    showToast('자원 배분을 신청했습니다. 관리자 승인을 기다려주세요.', 'success');
+    loadMyLedgers();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || '신청 실패', 'error');
+  }
+}
+function fmtNum(n){ return (n==null||n==='')?'-':(Math.round(n*100)/100); }
+function escapeAttr(s){ if(s==null)return''; return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function pendingFeatures() {
   return new Set(myRequests.filter(r => r.status === 'pending').map(r => r.feature));

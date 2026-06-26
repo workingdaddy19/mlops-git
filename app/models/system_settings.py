@@ -69,24 +69,6 @@ SETTINGS_SEED = [
         "label": "S3 AWS 리전",
         "group": "s3",
     },
-    {
-        "key": "AIRFLOW_BASE_URL",
-        "value": "http://airflow.mlops.click",
-        "label": "Airflow 접속 URL",
-        "group": "airflow",
-    },
-    {
-        "key": "AIRFLOW_USERNAME",
-        "value": "admin",
-        "label": "Airflow 로그인 계정",
-        "group": "airflow",
-    },
-    {
-        "key": "AIRFLOW_PASSWORD",
-        "value": "admin",
-        "label": "Airflow 로그인 비밀번호",
-        "group": "airflow",
-    },
 ]
 
 

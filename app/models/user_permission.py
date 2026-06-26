@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
-VALID_FEATURES = frozenset({"s3", "athena", "jupyter", "mlflow", "airflow"})
+VALID_FEATURES = frozenset({"s3", "athena", "jupyter"})  # mlflow(Experiments)·airflow는 승인 불요/미제공
 
 
 class UserFeaturePermission(Base):

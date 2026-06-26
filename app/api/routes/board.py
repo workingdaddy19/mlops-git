@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
-from app.api.deps import get_board_service, get_current_user
+from app.api.deps import get_board_service, require_admin
 from app.schemas.auth import UserRead
 from app.schemas.board import BoardCreate, BoardListItem, BoardRead, BoardUpdate
 from app.schemas.common import MessageResponse
@@ -31,21 +31,22 @@ def get_board(board_id: int, service: BoardService = Depends(get_board_service))
 @router.post("", response_model=BoardRead)
 def create_board(
     body: BoardCreate,
-    user: UserRead = Depends(get_current_user),
+    admin: UserRead = Depends(require_admin),
     service: BoardService = Depends(get_board_service),
 ):
-    return service.create_board(body, user.username)
+    """공지 작성 — 관리자 전용."""
+    return service.create_board(body, admin.username)
 
 
 @router.put("/{board_id}", response_model=BoardRead)
 def update_board(
     board_id: int,
     body: BoardUpdate,
-    user: UserRead = Depends(get_current_user),
+    admin: UserRead = Depends(require_admin),
     service: BoardService = Depends(get_board_service),
 ):
     try:
-        return service.update_board(board_id, body, user.username)
+        return service.update_board(board_id, body, admin.username)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
@@ -55,11 +56,11 @@ def update_board(
 @router.delete("/{board_id}", response_model=MessageResponse)
 def delete_board(
     board_id: int,
-    user: UserRead = Depends(get_current_user),
+    admin: UserRead = Depends(require_admin),
     service: BoardService = Depends(get_board_service),
 ):
     try:
-        service.delete_board(board_id, user.username, user.role)
+        service.delete_board(board_id, admin.username, admin.role)
         return MessageResponse(message="삭제되었습니다.")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -71,7 +72,7 @@ def delete_board(
 async def upload_file(
     board_id: int,
     file: UploadFile,
-    user: UserRead = Depends(get_current_user),
+    admin: UserRead = Depends(require_admin),
     service: BoardService = Depends(get_board_service),
 ):
     content = await file.read()

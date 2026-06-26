@@ -48,6 +48,7 @@ class CapacityEstimateRead(BaseModel):
     recommended_node: str | None = None
     basis_note: str | None = None
     estimated_by: str | None = None
+    status: str = "pending"
     created_at: datetime | None = None
     steps: list[WorksheetStepRead] = []
 
@@ -57,6 +58,7 @@ class CapacityEstimateRead(BaseModel):
 
 # ── Resource Ledger ─────────────────────────────────────────────────────────
 class ResourceLedgerCreate(BaseModel):
+    assigned_to: str | None = None
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
@@ -65,10 +67,12 @@ class ResourceLedgerCreate(BaseModel):
     alloc_gpu: int | None = None
     itsm_ticket: str | None = None
     allocated_at: date | None = None
+    starts_at: date | None = None
     expires_at: date | None = None
 
 
 class ResourceLedgerUpdate(BaseModel):
+    assigned_to: str | None = None
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
@@ -77,6 +81,7 @@ class ResourceLedgerUpdate(BaseModel):
     alloc_gpu: int | None = None
     itsm_ticket: str | None = None
     allocated_at: date | None = None
+    starts_at: date | None = None
     expires_at: date | None = None
 
 
@@ -87,9 +92,18 @@ class LedgerTransition(BaseModel):
     reclaimed_at: date | None = None
 
 
+class ResourceRequestCreate(BaseModel):
+    """사용자 자원 신청 — 프로파일(용량) + 기간(필수). Ledger를 submitted로 생성."""
+    profile_server: str = ""          # 프로파일(JupyterHub named server) 키 = 용량
+    period_start: date                # 사용 시작일(필수)
+    period_end: date                  # 사용 종료(만료)일(필수)
+    request_note: str | None = None   # 신청 사유
+
+
 class ResourceLedgerRead(BaseModel):
     id: int
     project_id: int
+    assigned_to: str | None = None
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
@@ -98,11 +112,13 @@ class ResourceLedgerRead(BaseModel):
     alloc_gpu: int | None = None
     itsm_ticket: str | None = None
     allocated_at: date | None = None
+    starts_at: date | None = None
     expires_at: date | None = None
     status: str
     reclaimed_at: date | None = None
     reclaim_reason: str | None = None
     recorded_by: str | None = None
+    request_note: str | None = None
     # 파생(만료 임박/경과) — 서비스에서 채움
     days_to_expiry: int | None = None
     expiry_state: str | None = None  # ok / soon / overdue / none

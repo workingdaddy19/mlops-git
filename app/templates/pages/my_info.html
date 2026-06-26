@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}내정보 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>내정보</span>
+{% endblock %}
+
+{% block content %}
+<div class="mi-grid">
+  <!-- 기본정보 -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div class="card-title">👤 기본정보</div>
+      <button class="pw-key-btn" title="비밀번호 변경" onclick="openChangePwModal(false)">🔑</button>
+    </div>
+    <div id="mi-basic">
+      <div class="mi-field"><span class="k">이름</span><span class="v" id="b-name">-</span></div>
+      <div class="mi-field"><span class="k">아이디</span><span class="v" id="b-username">-</span></div>
+      <div class="mi-field"><span class="k">부서</span><span class="v" id="b-dept">-</span></div>
+      <div class="mi-field"><span class="k">역할</span><span class="v" id="b-role">-</span></div>
+    </div>
+  </div>
+
+  <!-- 부여된 권한 -->
+  <div class="card">
+    <div class="card-title">✅ 부여된 권한</div>
+    <div id="mi-perms" style="font-size:13px; color:var(--text-muted);">로딩 중...</div>
+  </div>
+</div>
+
+<!-- 신청중인 권한/서비스 -->
+<div class="card">
+  <div class="card-title">📨 신청 중인 권한</div>
+  <div style="overflow-x:auto;">
+    <table class="data-table">
+      <thead><tr><th style="width:160px;">기능</th><th style="width:100px;">상태</th><th>사유</th><th style="width:160px;">신청일</th></tr></thead>
+      <tbody id="mi-reqs"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">로딩 중...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 참여중인 과제 -->
+<div class="card">
+  <div class="card-title">🗂️ 참여 중인 분석 과제</div>
+  <div style="overflow-x:auto;">
+    <table class="data-table">
+      <thead><tr><th style="width:160px;">코드</th><th>과제명</th><th style="width:170px;">기간</th><th style="width:80px;text-align:center;">상태</th></tr></thead>
+      <tbody id="mi-projects"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">로딩 중...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const REQ_STATUS = {
+  pending:  { text:'대기', cls:'rb-pending' },
+  approved: { text:'승인', cls:'rb-approved' },
+  rejected: { text:'반려', cls:'rb-rejected' },
+};
+const PROJ_ST = {
+  planning:  { text:'계획', bg:'#fef3c7', fg:'#92400e' },
+  active:    { text:'진행', bg:'#d1fae5', fg:'#065f46' },
+  completed: { text:'완료', bg:'#e2e8f0', fg:'#475569' },
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadBasic(); loadPerms(); loadRequests(); loadProjects();
+});
+
+async function loadBasic() {
+  const res = await apiFetch('/api/auth/me');
+  if (!res || !res.ok) return;
+  const u = await res.json();
+  document.getElementById('b-name').textContent = u.name || '-';
+  document.getElementById('b-username').textContent = u.username || '-';
+  document.getElementById('b-dept').textContent = u.department || '-';
+  document.getElementById('b-role').textContent = u.role === 'admin' ? '관리자' : '사용자';
+}
+
+async function loadPerms() {
+  const el = document.getElementById('mi-perms');
+  const res = await apiFetch('/api/auth/me/permissions');
+  if (!res || !res.ok) { el.textContent = '조회 실패'; return; }
+  const perms = await res.json();
+  if (!perms.length) { el.innerHTML = '<span class="chip chip-muted">부여된 권한 없음</span>'; return; }
+  el.innerHTML = perms.map(p => `<span class="chip">${escapeHtml(p)}</span>`).join('');
+}
+
+async function loadRequests() {
+  const tbody = document.getElementById('mi-reqs');
+  const res = await apiFetch('/api/permissions/requests/me');
+  if (!res || !res.ok) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:16px;">조회 실패</td></tr>`; return; }
+  const list = await res.json();
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">신청 내역이 없습니다.</td></tr>`; return; }
+  tbody.innerHTML = list.map(r => {
+    const st = REQ_STATUS[r.status] || { text: r.status, cls: 'rb-pending' };
+    const dt = (r.requested_at || '').slice(0, 16).replace('T', ' ');
+    return `<tr>
+      <td>${escapeHtml(r.feature)}</td>
+      <td><span class="req-badge ${st.cls}">${st.text}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${escapeHtml(r.reason || '-')}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(dt)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadProjects() {
+  const tbody = document.getElementById('mi-projects');
+  const res = await apiFetch('/api/resource/projects/mine');
+  if (!res || !res.ok) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">참여 중인 과제가 없습니다.</td></tr>`; return; }
+  const list = await res.json();
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">참여 중인 과제가 없습니다.</td></tr>`; return; }
+  tbody.innerHTML = list.map(p => {
+    const st = PROJ_ST[p.status] || PROJ_ST.planning;
+    const period = (p.period_start || '?') + ' ~ ' + (p.period_end || '?');
+    return `<tr>
+      <td><a href="/resource/projects/${p.id}" style="font-family:monospace;font-size:12px;color:var(--primary);font-weight:600;">${escapeHtml(p.code)}</a></td>
+      <td><a href="/resource/projects/${p.id}" style="font-weight:600;">${escapeHtml(p.name)}</a></td>
+      <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(period)}</td>
+      <td style="text-align:center;"><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:${st.bg};color:${st.fg};font-weight:600;">${st.text}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+{% endblock %}

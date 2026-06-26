@@ -41,14 +41,13 @@
     <div class="stat-badge" id="badge-jupyter">⏳</div>
   </a>
 
-  <a href="/aiml/inference" class="stat-card">
-    <div class="stat-icon">🔮</div>
+  <a href="/aiml/experiments" class="stat-card">
+    <div class="stat-icon">📈</div>
     <div class="stat-body">
-      <div class="stat-label">예측 실행 · 모델</div>
-      <div class="stat-value" id="val-model">모니터링</div>
-      <div class="stat-sub" id="sub-model">MLflow 확인 중...</div>
+      <div class="stat-label">모델 실험 · 배포</div>
+      <div class="stat-value" id="val-model">Experiments</div>
+      <div class="stat-sub">실험·모델 레지스트리 바로가기 →</div>
     </div>
-    <div class="stat-badge" id="badge-model">⏳</div>
   </a>
 
   <!-- 분석 자원 (admin only — JS로 표시) -->
@@ -63,62 +62,60 @@
   </a>
 </div>
 
-<!-- ═══ 하단: 업무 흐름 가이드 ════════════════════════════════════ -->
-<div class="card" style="margin-top:8px;">
+<!-- ═══ 하단(admin): 분석 자원 현황 ════════════════════════════════ -->
+<div class="card" id="resource-card" style="margin-top:8px; display:none;">
+  <div class="dash-card-head">
+    <div class="card-title" style="margin:0;">🧮 분석 자원 현황</div>
+    <a href="/resource/dashboard" class="dash-more">자원 대시보드 ›</a>
+  </div>
+  <div class="res-grid">
+    <div class="res-box"><div class="res-num" id="rs-active">—</div><div class="res-lbl">활성 자원</div></div>
+    <div class="res-box"><div class="res-num" id="rs-pending" style="color:#1d4ed8;">—</div><div class="res-lbl">승인 대기</div></div>
+    <div class="res-box"><div class="res-num" id="rs-soon" style="color:#d97706;">—</div><div class="res-lbl">만료 임박 (D-14)</div></div>
+    <div class="res-box"><div class="res-num" id="rs-over" style="color:#dc2626;">—</div><div class="res-lbl">만료 경과 (회수대상)</div></div>
+    <div class="res-box"><div class="res-num" id="rs-cap" style="font-size:15px; color:var(--text-primary);">—</div><div class="res-lbl">활성 용량 합계</div></div>
+  </div>
+  <div id="rs-pending-note" style="display:none; font-size:12px; color:#92400e; background:#fef3c7; border-radius:6px; padding:8px 12px; margin-top:12px;"></div>
+</div>
+
+<!-- ═══ 하단(사용자): 업무 흐름 가이드 ═════════════════════════════ -->
+<div class="card" id="flow-card" style="margin-top:8px;">
   <div class="card-title">🧭 분석 업무 흐름 가이드</div>
   <p style="font-size:12px; color:var(--text-muted); margin:-4px 0 14px;">
-    분석 과제는 아래 순서로 진행됩니다. 각 단계의 칩을 클릭하면 해당 메뉴로 이동합니다. (정식 승인·배포는 사내 <b>ITSM</b> 기준)
+    분석 과제는 아래 순서로 진행됩니다. 각 단계의 칩을 클릭하면 해당 메뉴로 이동합니다.
   </p>
   <div class="flow">
     <a class="flow-step" href="/resource/projects">
       <span class="flow-no">1</span>
-      <span class="flow-t">분석 과제 등록</span>
-      <span class="flow-d">과제명·기간·데이터·용량산정·정보보안</span>
-      <span class="flow-menu">분석자원 › 분석 과제</span>
+      <span class="flow-t">분석 과제 · 자원 산정</span>
+      <span class="flow-d">과제 등록 + 용량 산정서(Peak)</span>
+      <span class="flow-menu">프로젝트 › 분석 과제</span>
     </a>
     <span class="flow-arrow">→</span>
-    <div class="flow-step flow-ext">
-      <span class="flow-no">2</span>
-      <span class="flow-t">ITSM 요청 / 승인</span>
-      <span class="flow-d">조직장 결재 (외부 표준 시스템)</span>
-      <span class="flow-menu flow-menu-ext">ITSM</span>
-    </div>
-    <span class="flow-arrow">→</span>
     <a class="flow-step" href="/permissions">
-      <span class="flow-no">3</span>
-      <span class="flow-t">자원 생성 / 배분 요청</span>
-      <span class="flow-d">권한 신청 + 자원 대장 등록</span>
-      <span class="flow-menu">권한 신청 / 분석자원</span>
+      <span class="flow-no">2</span>
+      <span class="flow-t">자원 생성 / 배분</span>
+      <span class="flow-d">자원 배분 신청 · 관리자 승인</span>
+      <span class="flow-menu">프로젝트 › 권한 신청</span>
     </a>
     <span class="flow-arrow">→</span>
     <a class="flow-step" href="/aiml/jupyter">
+      <span class="flow-no">3</span>
+      <span class="flow-t">과제 수행 (권한 신청 포함)</span>
+      <span class="flow-d">권한 신청 + 노트북 분석·모델 개발</span>
+      <span class="flow-menu">Analysis › 분석기(Jupyter)</span>
+    </a>
+    <span class="flow-arrow">→</span>
+    <a class="flow-step" href="/aiml/experiments">
       <span class="flow-no">4</span>
-      <span class="flow-t">과제 수행</span>
-      <span class="flow-d">노트북에서 분석·모델 개발</span>
-      <span class="flow-menu">Analysis › Jupyter</span>
-    </a>
-    <span class="flow-arrow">→</span>
-    <a class="flow-step" href="/aiml/experiments">
-      <span class="flow-no">5</span>
-      <span class="flow-t">완료 · 운영 배포 현황</span>
-      <span class="flow-d">실험·파이프라인·튜닝</span>
-      <span class="flow-menu">Models › Experiments &amp; Pipelines</span>
-    </a>
-    <span class="flow-arrow">→</span>
-    <a class="flow-step" href="/aiml/inference">
-      <span class="flow-no">6</span>
-      <span class="flow-t">예측 실행 모니터링</span>
-      <span class="flow-d">추론 API 호출·점검</span>
-      <span class="flow-menu">Models › Inference Test</span>
-    </a>
-    <span class="flow-arrow">→</span>
-    <a class="flow-step" href="/aiml/experiments">
-      <span class="flow-no">7</span>
-      <span class="flow-t">모델 품질 모니터링</span>
-      <span class="flow-d">지표·드리프트 추적</span>
-      <span class="flow-menu">Models › Experiments &amp; Pipelines</span>
+      <span class="flow-t">완료 · 운영 배포</span>
+      <span class="flow-d">실험·모델 레지스트리·배포</span>
+      <span class="flow-menu">Analysis › 실험/모델</span>
     </a>
   </div>
+  <p style="font-size:12px; color:#92400e; background:#fef3c7; border-radius:6px; padding:8px 12px; margin:12px 0 0;">
+    ※ 자원 산정 후 <b>자원 생성</b>을 위해서는 사내 <b>ITSM 사전 결재</b>가 필요합니다.
+  </p>
 </div>
 
 <!-- ═══ 하단: 운영 관리 (admin only) ══════════════════════════════ -->
@@ -176,6 +173,12 @@
 .flow-arrow { align-self:center; color:#cbd5e1; font-size:18px; font-weight:700; }
 @media (max-width:900px){ .flow-arrow{ display:none; } }
 
+/* 분석 자원 현황 (admin) */
+.res-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
+.res-box { border:1px solid var(--border); border-radius:10px; padding:14px 10px; text-align:center; }
+.res-num { font-size:26px; font-weight:700; color:#0d9488; line-height:1.1; }
+.res-lbl { font-size:11px; color:var(--text-muted); margin-top:5px; }
+
 /* 운영관리 */
 .ops-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
 .ops-link { display:flex; align-items:center; gap:9px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; text-decoration:none; color:var(--text-primary); font-size:13px; font-weight:500; background:var(--bg-content); transition:background .12s, border-color .12s; }
@@ -190,15 +193,44 @@ document.addEventListener('DOMContentLoaded', () => {
   if (isAdmin) {
     document.getElementById('ops-card').style.display = '';
     document.getElementById('card-resource').style.display = '';
+    document.getElementById('resource-card').style.display = '';  // 분석 자원 현황
+    document.getElementById('flow-card').style.display = 'none';   // 흐름 가이드는 사용자용
   }
   Promise.allSettled([
     loadNotices(),
     loadUsers(),
     loadJupyter(),
-    loadModel(),
     isAdmin ? loadResource() : Promise.resolve(),
+    isAdmin ? loadResourceSummary() : Promise.resolve(),
   ]);
 });
+
+// ── 분석 자원 현황 (admin) ──────────────────────────────
+async function loadResourceSummary() {
+  try {
+    const [dRes, rRes] = await Promise.all([
+      apiFetch('/api/resource/dashboard'),
+      apiFetch('/api/resource/requests'),
+    ]);
+    if (dRes && dRes.ok) {
+      const d = await dRes.json();
+      document.getElementById('rs-active').textContent = d.active_count ?? 0;
+      document.getElementById('rs-soon').textContent = d.expiring_count ?? 0;
+      document.getElementById('rs-over').textContent = d.overdue_count ?? 0;
+      const t = d.capacity_totals || {};
+      document.getElementById('rs-cap').textContent = `${t.vcpu||0} vCPU / ${t.mem_gb||0} GB${t.gpu?` / GPU ${t.gpu}`:''}`;
+    }
+    if (rRes && rRes.ok) {
+      const reqs = await rRes.json();
+      document.getElementById('rs-pending').textContent = reqs.length;
+      if (reqs.length) {
+        const note = document.getElementById('rs-pending-note');
+        note.style.display = 'block';
+        note.innerHTML = `📥 승인 대기 중인 자원 신청 <b>${reqs.length}건</b> — <a href="/resource/dashboard" style="color:#92400e;font-weight:700;">검토하기 →</a>`;
+      }
+    }
+  } catch { /* best-effort */ }
+}
 
 // ── 공지 ──────────────────────────────────────────────
 async function loadNotices() {
@@ -247,20 +279,6 @@ async function loadJupyter() {
   }
 }
 
-// ── 예측·모델 (MLflow health) ─────────────────────────
-async function loadModel() {
-  try {
-    const res = await apiFetch('/api/mlflow/health');
-    if (!res || !res.ok) throw new Error();
-    const d = await res.json();
-    const ok = d.status === 'ok';
-    document.getElementById('sub-model').textContent = ok ? 'MLflow 정상 · 추론 테스트 →' : 'MLflow 응답 없음';
-    setBadge('badge-model', ok);
-  } catch {
-    document.getElementById('sub-model').textContent = '상태 조회 실패';
-    setBadge('badge-model', false);
-  }
-}
 
 // ── 분석 자원 (admin) ─────────────────────────────────
 async function loadResource() {

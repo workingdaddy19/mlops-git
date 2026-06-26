@@ -30,6 +30,10 @@ k8s/dev/backend-secret-dev.yaml
 .streamlit/
 # 로컬 Windows 실행 편의 스크립트 (서버 배포 불필요 · 개인 PC 경로 종속)
 start_backend.bat
+# PDCA 산출물 (plan/design/analysis/report) — 로컬·메모리 보관, 공개 레포 미포함
+docs/
+# 아카이브 — 서버 배포 불필요한 개발 흔적/미사용 소스 로컬 보관 (공개 레포 미포함)
+archive/
 
 # ===========================================================
 #  IDE / OS

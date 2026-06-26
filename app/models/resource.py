@@ -72,6 +72,8 @@ class CapacityEstimate(Base):
     recommended_node: Mapped[str | None] = mapped_column(String(200))  # 노드타입·수
     basis_note: Mapped[str | None] = mapped_column(Text)
     estimated_by: Mapped[str | None] = mapped_column(String(50))
+    # 산정서 승인 상태 — approved 산정서만 자원 배분의 용량 한도 기준이 된다.
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     project: Mapped["AnalysisProject"] = relationship(back_populates="estimates")
@@ -120,6 +122,9 @@ class ResourceLedger(Base):
     reclaimed_at: Mapped[date | None] = mapped_column(Date)
     reclaim_reason: Mapped[str | None] = mapped_column(String(20))
     recorded_by: Mapped[str | None] = mapped_column(String(50))
+    request_note: Mapped[str | None] = mapped_column(String(500))  # 사용자 자원 신청 사유
+    assigned_to: Mapped[str | None] = mapped_column(String(50), index=True)  # 권한 부여 대상 사용자(username)
+    starts_at: Mapped[date | None] = mapped_column(Date)                     # 접속 가능 시작일(이전엔 접속 불가)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

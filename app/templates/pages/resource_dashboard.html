@@ -19,6 +19,14 @@
   <div class="card" style="text-align:center;"><div style="font-size:12px;color:var(--text-muted);">활성 용량 합계</div><div id="c-cap" style="font-size:17px;font-weight:700;margin-top:6px;">-</div></div>
 </div>
 
+<!-- 자원 신청 승인 대기 -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-title" style="font-size:15px;">📥 자원 신청 승인 대기 (<span id="req-count">0</span>)</div>
+  <div style="overflow-x:auto;"><table class="data-table"><thead>
+    <tr><th style="width:150px;">과제</th><th>신청자</th><th style="width:160px;">요청 프로파일/사양</th><th>사유</th><th style="width:160px;">처리</th></tr>
+  </thead><tbody id="req-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">로딩 중...</td></tr></tbody></table></div>
+</div>
+
 <div class="card" style="margin-bottom:16px;">
   <div class="card-title" style="font-size:15px;">⏰ 만료 경과 (즉시 회수 검토)</div>
   <div style="overflow-x:auto;"><table class="data-table"><thead>
@@ -32,11 +40,41 @@
     <tr><th>네임스페이스/노드</th><th style="width:140px;">용량</th><th style="width:110px;">ITSM</th><th style="width:180px;">만료</th></tr>
   </thead><tbody id="soon-tbody"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">로딩 중...</td></tr></tbody></table></div>
 </div>
+
+<!-- 승인 확정 모달 -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal-box" style="width:480px; max-width:95vw;">
+    <div class="modal-title">자원 신청 승인 — 최종 배분 확정</div>
+    <div id="ap-proj" style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;"></div>
+    <div id="ap-limit" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
+    <div style="display:flex; gap:10px;">
+      <div class="form-group" style="flex:1;"><label class="form-label">vCPU *</label><input id="ap-vcpu" class="form-input" type="number" step="0.5"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">메모리(GB) *</label><input id="ap-mem" class="form-input" type="number" step="1"></div>
+      <div class="form-group" style="width:90px;"><label class="form-label">GPU</label><input id="ap-gpu" class="form-input" type="number" step="1"></div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div class="form-group" style="flex:1;"><label class="form-label">대상 사용자 *</label><input id="ap-assigned" class="form-input" placeholder="아이디"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">환경(named server)</label><input id="ap-server" class="form-input"></div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div class="form-group" style="flex:1;"><label class="form-label">시작일 *</label><input id="ap-starts" class="form-input" type="date"></div>
+      <div class="form-group" style="flex:1;"><label class="form-label">만료일 *</label><input id="ap-expires" class="form-input" type="date"></div>
+    </div>
+    <div class="form-group"><label class="form-label">ITSM 티켓</label><input id="ap-itsm" class="form-input" placeholder="예: ITSM-12345"></div>
+    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 승인된 산정서 한도 내에서만 확정됩니다. 확정 시 <strong>active</strong>로 전환되어 <strong>대상 사용자</strong>의 Jupyter에 노출됩니다.</p>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+      <button class="btn btn-secondary" onclick="closeApprove()">취소</button>
+      <button class="btn btn-primary" onclick="submitApprove()">승인 확정</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', load);
+let REQ_MAP = {};
+
+document.addEventListener('DOMContentLoaded', () => { load(); loadRequests(); });
 
 async function load() {
   const res = await apiFetch('/api/resource/dashboard');
@@ -52,6 +90,97 @@ async function load() {
   renderRows('over-tbody', d.overdue || [], true);
   renderRows('soon-tbody', d.expiring || [], false);
 }
+
+// ── 자원 신청 승인 대기 ────────────────────────────────────────────────────
+async function loadRequests() {
+  const tbody = document.getElementById('req-tbody');
+  const res = await apiFetch('/api/resource/requests');
+  if (!res) return;
+  if (!res.ok) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:16px;">조회 실패</td></tr>`; return; }
+  const list = await res.json();
+  REQ_MAP = {};
+  list.forEach(r => REQ_MAP[r.id] = r);
+  document.getElementById('req-count').textContent = list.length;
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">대기 중인 신청이 없습니다.</td></tr>`; return; }
+  tbody.innerHTML = list.map(r => {
+    const spec = `${escapeHtml(r.jupyter_server_type||'기본')} · ${fmtNum(r.alloc_vcpu)}vCPU/${fmtNum(r.alloc_mem_gb)}GB${r.alloc_gpu?`/GPU${r.alloc_gpu}`:''}`;
+    return `<tr>
+      <td style="font-size:12px;"><a href="/resource/projects/${''}" onclick="return false;" style="font-weight:600;">${escapeHtml(r.project_name||'-')}</a><br><span style="color:var(--text-muted);font-family:monospace;">${escapeHtml(r.project_code||'')}</span></td>
+      <td style="font-size:12px;">${escapeHtml(r.requester||'-')}</td>
+      <td style="font-size:12px;">${spec}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${escapeHtml(r.request_note||'-')}</td>
+      <td>
+        <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="openApprove(${r.id})">승인</button>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-left:4px;" onclick="rejectRequest(${r.id})">반려</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openApprove(id) {
+  const r = REQ_MAP[id]; if (!r) return;
+  document.getElementById('ap-proj').textContent = `${r.project_code||''} · ${r.project_name||''} · 신청자 ${r.requester||''}`;
+  document.getElementById('ap-limit').textContent = '※ 승인된 산정서의 총 용량 한도 내에서 입력하세요. (한도 초과 시 승인 거부)';
+  document.getElementById('ap-vcpu').value = r.alloc_vcpu ?? '';
+  document.getElementById('ap-mem').value = r.alloc_mem_gb ?? '';
+  document.getElementById('ap-gpu').value = r.alloc_gpu ?? '';
+  document.getElementById('ap-assigned').value = r.assigned_to ?? r.requester ?? '';
+  document.getElementById('ap-server').value = r.jupyter_server_type ?? '';
+  document.getElementById('ap-starts').value = r.starts_at ?? '';
+  document.getElementById('ap-expires').value = r.expires_at ?? '';
+  document.getElementById('ap-itsm').value = r.itsm_ticket ?? '';
+  const m = document.getElementById('approveModal');
+  m.dataset.id = id;
+  m.classList.add('open');
+}
+function closeApprove() { document.getElementById('approveModal').classList.remove('open'); }
+
+async function submitApprove() {
+  const id = document.getElementById('approveModal').dataset.id;
+  const num = v => (v === '' || v == null) ? null : Number(v);
+  const assigned = document.getElementById('ap-assigned').value.trim();
+  const starts = document.getElementById('ap-starts').value;
+  const expires = document.getElementById('ap-expires').value;
+  if (!assigned) { return showToast('대상 사용자를 입력하세요.', 'error'); }
+  if (!starts || !expires) { return showToast('시작일과 만료일은 필수입니다.', 'error'); }
+  const body = {
+    alloc_vcpu: num(document.getElementById('ap-vcpu').value),
+    alloc_mem_gb: num(document.getElementById('ap-mem').value),
+    alloc_gpu: num(document.getElementById('ap-gpu').value),
+    assigned_to: assigned,
+    jupyter_server_type: document.getElementById('ap-server').value.trim() || null,
+    starts_at: starts,
+    expires_at: expires,
+    itsm_ticket: document.getElementById('ap-itsm').value.trim() || null,
+    allocated_at: new Date().toISOString().slice(0,10),
+  };
+  // 1) 최종 배분값 확정 → 2) submitted→approved → 3) approved→active
+  let res = await apiFetch(`/api/resource/ledgers/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  if (!res || !res.ok) { const e = res ? await res.json().catch(()=>({})) : {}; return showToast(e.detail || '배분값 저장 실패', 'error'); }
+  res = await apiFetch(`/api/resource/ledgers/${id}/transition`, { method:'POST', body: JSON.stringify({ to_status:'approved' }) });
+  if (!res || !res.ok) { const e = res ? await res.json().catch(()=>({})) : {}; return showToast(e.detail || '승인 전이 실패', 'error'); }
+  res = await apiFetch(`/api/resource/ledgers/${id}/transition`, { method:'POST', body: JSON.stringify({ to_status:'active' }) });
+  if (!res || !res.ok) { const e = res ? await res.json().catch(()=>({})) : {}; return showToast(e.detail || '가동 전이 실패', 'error'); }
+  closeApprove(); showToast('승인되어 자원이 배분(active)되었습니다.', 'success');
+  load(); loadRequests();
+}
+
+async function rejectRequest(id) {
+  if (!confirm('이 신청을 반려하시겠습니까? (신청자에게 draft로 되돌아갑니다)')) return;
+  const res = await apiFetch(`/api/resource/ledgers/${id}/transition`, { method:'POST', body: JSON.stringify({ to_status:'draft' }) });
+  if (!res) return;
+  if (res.ok) { showToast('반려되었습니다.', 'success'); loadRequests(); }
+  else { const e = await res.json().catch(()=>({})); showToast(e.detail || '반려 실패', 'error'); }
+}
+
+function showToast(msg, type='info') {
+  const bg = type==='error'?'#ef4444':type==='success'?'#10b981':'#1e293b';
+  const t = document.createElement('div'); t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;`;
+  document.body.appendChild(t); requestAnimationFrame(()=>t.style.opacity='1');
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),200);},3000);
+}
+document.addEventListener('click', e => { if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open'); });
 
 function renderRows(tbodyId, list, overdue) {
   const tbody = document.getElementById(tbodyId);

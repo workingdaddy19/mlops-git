@@ -101,11 +101,9 @@
     <div class="form-group" id="perm-section">
       <label class="form-label">기능 권한</label>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="s3"> S3 스토리지</label>
-        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="athena"> Athena DB</label>
-        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="jupyter"> Jupyter</label>
-        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="mlflow"> Experiments &amp; Pipelines</label>
-        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="airflow"> Airflow</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="s3"> 저장소 (S3)</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="athena"> 데이터조회(Athena)</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="jupyter"> 분석기(Jupyter)</label>
       </div>
       <div id="perm-admin-note" style="display:none; font-size:11px; color:var(--text-muted); margin-top:6px;">
         * admin 계정은 모든 기능 자동 허용됩니다.
@@ -125,13 +123,9 @@
     <div class="modal-title">비밀번호 초기화</div>
     <input type="hidden" id="r-id">
     <p style="font-size:13px; color:var(--text-muted); margin:0 0 14px; line-height:1.6;">
-      <strong id="r-username"></strong> 사용자의 비밀번호를 초기화합니다.<br>
-      초기화 후 해당 사용자는 <strong>다음 로그인 시 비밀번호를 반드시 변경</strong>해야 합니다.
+      <strong id="r-username"></strong> 사용자의 비밀번호를 <strong>아이디와 동일하게</strong> 초기화합니다.<br>
+      사용자에게 아이디로 로그인 후 <strong>내정보 › 비밀번호 변경</strong>을 안내하세요.
     </p>
-    <div class="form-group">
-      <label class="form-label">새 비밀번호 * <span style="font-weight:400; color:var(--text-muted); font-size:11px;">(8자 이상, 영문+숫자 포함)</span></label>
-      <input id="r-new" class="form-input" type="text" placeholder="새 비밀번호 (사용자에게 전달)">
-    </div>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
       <button class="btn btn-secondary" onclick="closeResetModal()">취소</button>
       <button class="btn btn-primary" onclick="submitReset()">초기화</button>
@@ -159,8 +153,8 @@
 </style>
 
 <script>
-const FEATURES = ['s3', 'athena', 'jupyter', 'mlflow', 'airflow'];
-const FEAT_LABEL = { s3:'S3', athena:'Athena', jupyter:'Jupyter', mlflow:'Experiments & Pipelines', airflow:'Airflow' };
+const FEATURES = ['s3', 'athena', 'jupyter'];
+const FEAT_LABEL = { s3:'저장소 (S3)', athena:'데이터조회(Athena)', jupyter:'분석기(Jupyter)' };
 
 document.addEventListener('DOMContentLoaded', loadUsers);
 
@@ -329,7 +323,6 @@ async function submitEdit() {
 function openResetModal(id, username) {
   document.getElementById('r-id').value = id;
   document.getElementById('r-username').textContent = username;
-  document.getElementById('r-new').value = '';
   document.getElementById('resetPwModal').classList.add('open');
 }
 function closeResetModal() {
@@ -337,17 +330,11 @@ function closeResetModal() {
 }
 async function submitReset() {
   const id = document.getElementById('r-id').value;
-  const newPw = document.getElementById('r-new').value.trim();
-  if (!newPw) { alert('새 비밀번호를 입력하세요.'); return; }
-
-  const res = await apiFetch(`/api/admin/users/${id}/password`, {
-    method: 'PUT',
-    body: JSON.stringify({ new_password: newPw }),
-  });
+  const res = await apiFetch(`/api/admin/users/${id}/password`, { method: 'PUT' });
   if (!res) return;
   if (res.ok) {
     closeResetModal();
-    showToast('비밀번호가 초기화되었습니다.', 'success');
+    showToast('비밀번호가 아이디와 동일하게 초기화되었습니다.', 'success');
   } else {
     const err = await res.json().catch(() => ({}));
     showToast(err.detail || '초기화 실패', 'error');

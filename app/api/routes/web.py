@@ -36,12 +36,6 @@ async def query_page(request: Request):
         {"request": request, "active_page": "query"})
 
 
-@router.get("/data/datasets", response_class=HTMLResponse, include_in_schema=False)
-async def datasets_page(request: Request):
-    return templates.TemplateResponse("pages/datasets.html",
-        {"request": request, "active_page": "datasets"})
-
-
 # ── Analysis ──────────────────────────────────────────────────────────────
 @router.get("/aiml/jupyter", response_class=HTMLResponse, include_in_schema=False)
 async def jupyter_page(request: Request):
@@ -67,12 +61,6 @@ async def experiments_page(request: Request, db: Session = Depends(get_db)):
     })
 
 
-@router.get("/aiml/mlflow", include_in_schema=False)
-async def mlflow_page_redirect():
-    """구 경로 호환 — 통합 페이지로 리다이렉트."""
-    return RedirectResponse(url="/aiml/experiments")
-
-
 # ── Notice ────────────────────────────────────────────────────────────────
 @router.get("/board", response_class=HTMLResponse, include_in_schema=False)
 async def board_page(request: Request):
@@ -80,7 +68,7 @@ async def board_page(request: Request):
         {"request": request, "active_page": "board"})
 
 
-# ── Files (S3 스토리지) ────────────────────────────────────────────────────
+# ── Files (S3 file) ────────────────────────────────────────────────────────
 @router.get("/files", response_class=HTMLResponse, include_in_schema=False)
 async def files_page(request: Request):
     from app.core.config import get_settings
@@ -89,29 +77,18 @@ async def files_page(request: Request):
         {"request": request, "active_page": "files", "s3_bucket": s3_bucket})
 
 
-# ── Inference Test ────────────────────────────────────────────────────────
-@router.get("/aiml/inference", response_class=HTMLResponse, include_in_schema=False)
-async def inference_page(request: Request):
-    from app.core.config import get_settings
-    settings = get_settings()
-    return templates.TemplateResponse("pages/inference.html",
-        {"request": request, "active_page": "inference",
-         "inference_url": settings.inference_base_url,
-         "inference_host": settings.inference_default_host})
-
-
-# ── Airflow ───────────────────────────────────────────────────────────────
-@router.get("/airflow", response_class=HTMLResponse, include_in_schema=False)
-async def airflow_page(request: Request):
-    return templates.TemplateResponse("pages/airflow.html",
-        {"request": request, "active_page": "airflow"})
-
-
 # ── 권한 신청 (사용자) ──────────────────────────────────────────────────────
 @router.get("/permissions", response_class=HTMLResponse, include_in_schema=False)
 async def permissions_page(request: Request):
     return templates.TemplateResponse("pages/permissions.html",
         {"request": request, "active_page": "permissions"})
+
+
+# ── 내정보 ─────────────────────────────────────────────────────────────────
+@router.get("/me", response_class=HTMLResponse, include_in_schema=False)
+async def my_info_page(request: Request):
+    return templates.TemplateResponse("pages/my_info.html",
+        {"request": request, "active_page": "my-info"})
 
 
 # ── 분석 자원 관리 ──────────────────────────────────────────────────────────
