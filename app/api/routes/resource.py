@@ -96,6 +96,20 @@ def lookup_users(
     return [{"username": u.username, "name": u.name, "department": u.department} for u in users]
 
 
+@router.get("/users/resolve")
+def resolve_users(
+    usernames: str = "",
+    db: Session = Depends(get_db),
+    _: UserRead = Depends(get_current_user),
+):
+    """사번 CSV → 이름 해석(인증). 멤버 사번을 성명으로 표시할 때 사용."""
+    ids = [s.strip() for s in (usernames or "").split(",") if s.strip()][:50]
+    if not ids:
+        return []
+    users = UserRepository(db).get_by_usernames(ids)
+    return [{"username": u.username, "name": u.name} for u in users]
+
+
 @router.post("/projects", response_model=AnalysisProjectRead, status_code=201)
 def create_project(
     body: AnalysisProjectCreate,
@@ -147,13 +161,12 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: UserRead = Depends(get_current_user),
 ):
-    """과제 수정 (본인/admin). 비-admin은 status/owner 변경 불가."""
+    """과제 수정 (본인/멤버/admin). 상태 변경은 사용자도 가능, 담당자(owner) 변경은 admin 전용."""
     if body.status and body.status not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"유효하지 않은 상태: {body.status}")
     data = body.model_dump(exclude_unset=True)
     if current_user.role != "admin":
-        data.pop("status", None)
-        data.pop("owner", None)
+        data.pop("owner", None)   # 담당자 변경은 admin 전용 (상태는 사용자도 허용)
     for field, value in data.items():
         setattr(project, field, value)
     db.commit()

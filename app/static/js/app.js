@@ -79,6 +79,17 @@ function makePager(pageSize, renderFn, pagerElId) {
   return { set(newItems) { items = newItems || []; page = 1; render(); } };
 }
 
+// ─── 사번 CSV → {사번:이름} 맵 해석 ──────────────────────────────────────────
+async function resolveUsernames(csv) {
+  const ids = (csv || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!ids.length) return {};
+  const res = await apiFetch('/api/resource/users/resolve?usernames=' + encodeURIComponent(ids.join(',')));
+  const list = (res && res.ok) ? await res.json() : [];
+  const map = {};
+  list.forEach(u => { map[u.username] = u.name; });
+  return map;
+}
+
 // ─── 멤버(사용자) 다중 선택 피커 — 사번/성명 검색 → 칩 ──────────────────────
 function makeMemberPicker(root) {
   if (!root) return { getCsv: () => '', count: () => 0, setCsv() {}, clear() {} };
@@ -124,7 +135,11 @@ function makeMemberPicker(root) {
   return {
     getCsv: () => selected.map(m => m.username).join(','),
     count: () => selected.length,
-    setCsv: (csv) => { selected = (csv || '').split(',').map(s => s.trim()).filter(Boolean).map(u => ({ username: u, name: u })); renderChips(); },
+    setCsv: (csv) => {
+      selected = (csv || '').split(',').map(s => s.trim()).filter(Boolean).map(u => ({ username: u, name: u }));
+      renderChips();
+      resolveUsernames(csv).then(map => { selected.forEach(m => { if (map[m.username]) m.name = map[m.username]; }); renderChips(); });
+    },
     clear: () => { selected = []; renderChips(); input.value = ''; dd.style.display = 'none'; },
   };
 }

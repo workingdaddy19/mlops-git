@@ -29,6 +29,12 @@ class UserRepository:
             q = q.filter(User.created_at < dt_to + timedelta(days=1))
         return q.order_by(User.id).all()
 
+    def get_by_usernames(self, usernames: list[str]) -> list[User]:
+        """사번 목록 → User 목록 (이름 해석용)."""
+        if not usernames:
+            return []
+        return self.session.query(User).filter(User.username.in_(usernames)).all()
+
     def search(self, q: str, limit: int = 20) -> list[User]:
         """멤버 선택용 — 사번/성명 부분일치(OR). 최소 필드만 노출용."""
         like = f"%{q}%"

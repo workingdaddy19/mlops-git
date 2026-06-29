@@ -300,19 +300,29 @@
     document.getElementById('bc-code').textContent = p.code;
     document.getElementById('proj-title').textContent = `${p.code} · ${p.name}`;
     document.getElementById('proj-status-sel').value = p.status;
-    document.getElementById('proj-status-wrap').style.display = IS_ADMIN ? 'flex' : 'none';  // 상태변경은 admin
+    document.getElementById('proj-status-wrap').style.display = 'flex';  // 상태변경은 사용자/admin 모두 가능
     // FR-16: 사용자=간편 '자원 신청'만, 수동 '자원 배분 등록'은 admin 전용
     document.getElementById('btn-ledger-add').style.display = IS_ADMIN ? '' : 'none';
     document.getElementById('btn-res-req').style.display = IS_ADMIN ? 'none' : '';
 
     const sec = { none: '미협의', requested: '협의요청', done: '협의완료' }[p.security_review_status] || p.security_review_status;
     document.getElementById('proj-info').innerHTML = `
-    <div><b>담당자</b> ${escapeHtml(p.owner)} · <b>인원</b> ${p.member_count}명 ${p.members ? '(' + escapeHtml(p.members) + ')' : ''}</div>
+    <div><b>담당자</b> ${escapeHtml(p.owner)} · <b>인원</b> ${p.member_count}명 <span id="pi-members" style="color:var(--text-secondary);"></span></div>
     <div><b>기간</b> ${p.period_start || '?'} ~ ${p.period_end || '?'}</div>
     <div><b>데이터 종류</b> ${escapeHtml(p.data_types || '-')}</div>
     <div><b>데이터셋</b> ${escapeHtml(p.datasets || '-')}</div>
     <div><b>정보보안 협의</b> ${sec} ${p.security_review_date ? '(' + p.security_review_date + ')' : ''} · <b>ITSM</b> ${escapeHtml(p.itsm_ticket || '-')}</div>
     <div><b>목적</b> ${escapeHtml(p.purpose || '-')}</div>`;
+
+    // 멤버(사번 CSV) → 이름 표시
+    const msEl = document.getElementById('pi-members');
+    const memberCsv = p.members || '';
+    if (memberCsv && msEl) {
+      const ids = memberCsv.split(',').map(s => s.trim()).filter(Boolean);
+      const fmt = (names) => `· 공동분석가 ${ids.length}명 (${names.join(', ')})`;
+      msEl.textContent = fmt(ids);  // 우선 사번
+      resolveUsernames(memberCsv).then(map => { msEl.textContent = fmt(ids.map(id => map[id] || id)); });
+    }
 
     renderEstimates(p.estimates || []);
     renderLedgers(p.ledgers || []);
@@ -427,8 +437,8 @@
     document.getElementById('ep-itsm').value = p.itsm_ticket || '';
     document.getElementById('ep-purpose').value = p.purpose || '';
     document.getElementById('ep-status').value = p.status || 'planning';
-    // 비-admin은 상태·담당자 변경 불가(백엔드에서도 차단) → 읽기전용 처리
-    document.getElementById('ep-status-wrap').style.display = IS_ADMIN ? '' : 'none';
+    // 상태는 사용자도 변경 가능 / 담당자(owner)는 admin 전용 → 읽기전용 처리
+    document.getElementById('ep-status-wrap').style.display = '';
     const epOwner = document.getElementById('ep-owner');
     epOwner.readOnly = !IS_ADMIN;
     epOwner.style.opacity = IS_ADMIN ? '' : '0.6';
@@ -454,7 +464,7 @@
       itsm_ticket: document.getElementById('ep-itsm').value.trim() || null,
       purpose: document.getElementById('ep-purpose').value.trim() || null,
     };
-    if (IS_ADMIN) body.status = document.getElementById('ep-status').value;
+    body.status = document.getElementById('ep-status').value;  // 상태는 사용자도 변경 가능
     const res = await apiFetch(`/api/resource/projects/${PROJECT_ID}`, { method: 'PUT', body: JSON.stringify(body) });
     if (!res) return;
     if (res.ok) {
