@@ -15,15 +15,19 @@
 <div class="card" style="margin-bottom:16px;">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
     <div class="card-title" id="proj-title" style="margin-bottom:0;">과제 정보</div>
-    <div id="proj-status-wrap" style="display:flex; gap:8px; align-items:center;">
+    <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+      <!-- 과제 수정: 소유자/멤버/admin 모두 (상세 진입 = 권한 보유) -->
       <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px; white-space:nowrap;" onclick="openEditProjectModal()">✏️ 과제 수정</button>
-      <label style="font-size:12px; color:var(--text-muted); white-space:nowrap;">상태</label>
-      <select id="proj-status-sel" class="form-select" style="padding:4px 10px; font-size:13px; width:auto;"
-        onchange="changeProjectStatus()">
-        <option value="planning">계획</option>
-        <option value="active">진행</option>
-        <option value="completed">완료</option>
-      </select>
+      <!-- 상태 변경: admin 전용 -->
+      <div id="proj-status-wrap" style="display:flex; gap:8px; align-items:center;">
+        <label style="font-size:12px; color:var(--text-muted); white-space:nowrap;">상태</label>
+        <select id="proj-status-sel" class="form-select" style="padding:4px 10px; font-size:13px; width:auto;"
+          onchange="changeProjectStatus()">
+          <option value="planning">계획</option>
+          <option value="active">진행</option>
+          <option value="completed">완료</option>
+        </select>
+      </div>
     </div>
   </div>
   <div id="proj-info" style="font-size:13px; line-height:1.9;">로딩 중...</div>
@@ -423,8 +427,11 @@
     document.getElementById('ep-itsm').value = p.itsm_ticket || '';
     document.getElementById('ep-purpose').value = p.purpose || '';
     document.getElementById('ep-status').value = p.status || 'planning';
-    // 비-admin은 상태 변경 불가
+    // 비-admin은 상태·담당자 변경 불가(백엔드에서도 차단) → 읽기전용 처리
     document.getElementById('ep-status-wrap').style.display = IS_ADMIN ? '' : 'none';
+    const epOwner = document.getElementById('ep-owner');
+    epOwner.readOnly = !IS_ADMIN;
+    epOwner.style.opacity = IS_ADMIN ? '' : '0.6';
     document.getElementById('editProjectModal').classList.add('open');
   }
   function closeEditProjectModal() { document.getElementById('editProjectModal').classList.remove('open'); }
