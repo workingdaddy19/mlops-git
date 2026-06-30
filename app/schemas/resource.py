@@ -62,6 +62,7 @@ class ResourceLedgerCreate(BaseModel):
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
+    jupyterhub_size: str | None = None   # 용량 타입 small/medium/large
     alloc_vcpu: float | None = None
     alloc_mem_gb: float | None = None
     alloc_gpu: int | None = None
@@ -76,6 +77,7 @@ class ResourceLedgerUpdate(BaseModel):
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
+    jupyterhub_size: str | None = None
     alloc_vcpu: float | None = None
     alloc_mem_gb: float | None = None
     alloc_gpu: int | None = None
@@ -93,8 +95,9 @@ class LedgerTransition(BaseModel):
 
 
 class ResourceRequestCreate(BaseModel):
-    """사용자 자원 신청 — 프로파일(용량) + 기간(필수). Ledger를 submitted로 생성."""
-    profile_server: str = ""          # 프로파일(JupyterHub named server) 키 = 용량
+    """사용자 자원 신청 — 용량 타입(size) + 기간(필수). Ledger를 submitted로 생성."""
+    size: str = ""                    # 용량 타입 small/medium/large (우선)
+    profile_server: str = ""          # (하위호환) 프로파일 named server 키
     period_start: date                # 사용 시작일(필수)
     period_end: date                  # 사용 종료(만료)일(필수)
     request_note: str | None = None   # 신청 사유
@@ -107,6 +110,7 @@ class ResourceLedgerRead(BaseModel):
     namespace: str | None = None
     node_group: str | None = None
     jupyter_server_type: str | None = None
+    jupyterhub_size: str | None = None   # 용량 타입 small/medium/large
     alloc_vcpu: float | None = None
     alloc_mem_gb: float | None = None
     alloc_gpu: int | None = None

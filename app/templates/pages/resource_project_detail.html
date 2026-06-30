@@ -131,7 +131,7 @@
   <div class="modal-box" style="width:560px; max-width:96vw; max-height:92vh; overflow-y:auto;">
     <div class="modal-title" id="ledger-modal-title">자원 배분 등록</div>
     <input type="hidden" id="l-id">
-    <div class="form-group"><label class="form-label">자원 프로파일(용량)</label><select id="l-profile" class="form-select"
+    <div class="form-group"><label class="form-label">용량 타입(선택 시 vCPU/메모리 자동 채움)</label><select id="l-profile" class="form-select"
         onchange="applyLedgerProfile()"></select></div>
     <div id="l-cap"
       style="font-size:12px; padding:8px 12px; border-radius:6px; background:#f0fdfa; border:1px solid #99f6e4; margin-bottom:12px;">
@@ -172,7 +172,7 @@
 <div class="modal-overlay" id="resReqModal">
   <div class="modal-box" style="width:460px; max-width:95vw;">
     <div class="modal-title">자원 신청</div>
-    <div class="form-group"><label class="form-label">자원 프로파일(용량) *</label><select id="rr-profile" class="form-select" onchange="updateRrSpec()"></select></div>
+    <div class="form-group"><label class="form-label">용량 타입 *</label><select id="rr-profile" class="form-select" onchange="updateRrSpec()"></select></div>
     <div id="rr-spec" style="font-size:12px; color:var(--text-secondary); margin:-8px 0 10px;">—</div>
     <div id="rr-cap" style="font-size:12px; padding:8px 12px; border-radius:6px; background:#f0fdfa; border:1px solid #99f6e4; margin-bottom:12px;">산정서 한도 확인 중...</div>
     <div style="display:flex; gap:10px;">
@@ -628,10 +628,11 @@
     }
     document.getElementById('l-profile').innerHTML =
       '<option value="__none">— 직접 입력 —</option>' +
-      LPROFILES.map(p => `<option value="${escapeAttr(p.server)}">${escapeHtml(p.name)} (${p.vcpu ?? '-'}vCPU/${p.mem_gb ?? '-'}GB)</option>`).join('');
+      LPROFILES.map(p => `<option value="${escapeAttr(p.size || p.server)}">${escapeHtml(p.name)}</option>`).join('');
   }
   function applyLedgerProfile() {
-    const p = LPROFILES.find(x => (x.server || '') === document.getElementById('l-profile').value);
+    const v = document.getElementById('l-profile').value;
+    const p = LPROFILES.find(x => (x.size || x.server || '') === v);
     if (!p) return;
     document.getElementById('l-vcpu').value = p.vcpu ?? '';
     document.getElementById('l-mem').value = p.mem_gb ?? '';
@@ -653,8 +654,7 @@
   async function openResReqModal() {
     await ensureLProfiles();
     document.getElementById('rr-profile').innerHTML = LPROFILES.map(p => {
-      const spec = [p.vcpu != null ? `${p.vcpu} vCPU` : null, p.mem_gb != null ? `${p.mem_gb} GB` : null, p.gpu ? `GPU ${p.gpu}` : null].filter(Boolean).join(' / ');
-      return `<option value="${escapeAttr(p.server)}">${escapeHtml(p.name)}${spec ? ' · ' + spec : ''}</option>`;
+      return `<option value="${escapeAttr(p.size || p.server)}">${escapeHtml(p.name)}</option>`;
     }).join('');
     document.getElementById('rr-start').value = '';
     document.getElementById('rr-end').value = '';
@@ -666,9 +666,9 @@
   function closeResReqModal() { document.getElementById('resReqModal').classList.remove('open'); }
   function updateRrSpec() {
     const sv = document.getElementById('rr-profile').value;
-    const p = LPROFILES.find(x => (x.server || '') === sv);
+    const p = LPROFILES.find(x => (x.size || x.server || '') === sv);
     document.getElementById('rr-spec').textContent = p
-      ? `용량: ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB · GPU ${p.gpu ?? 0}`
+      ? `용량 타입: ${p.name} (참고 ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB${p.gpu ? ' · GPU '+p.gpu : ''})`
       : '용량 정보 없음';
   }
   async function submitResReq() {
@@ -677,7 +677,7 @@
     if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
     if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
     const body = {
-      profile_server: document.getElementById('rr-profile').value,
+      size: document.getElementById('rr-profile').value,
       period_start: start, period_end: end,
       request_note: document.getElementById('rr-note').value.trim() || null,
     };
@@ -719,9 +719,11 @@
     if (!assigned) { alert('대상 사용자는 필수입니다.'); return; }
     if (!vcpu || !mem) { alert('vCPU·메모리 용량은 필수입니다.'); return; }
     if (!starts || !expire) { alert('시작일과 만료일은 필수입니다.'); return; }
+    const pv = document.getElementById('l-profile').value;
     const body = {
       assigned_to: assigned,
       jupyter_server_type: document.getElementById('l-jst').value.trim() || null,
+      jupyterhub_size: (pv && pv !== '__none') ? pv : null,   // 선택한 용량 타입
       alloc_vcpu: parseFloat(vcpu) || null,
       alloc_mem_gb: parseFloat(mem) || null,
       alloc_gpu: parseInt(document.getElementById('l-gpu').value, 10) || null,

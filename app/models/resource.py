@@ -129,6 +129,7 @@ class ResourceLedger(Base):
     namespace: Mapped[str | None] = mapped_column(String(100))
     node_group: Mapped[str | None] = mapped_column(String(100))
     jupyter_server_type: Mapped[str | None] = mapped_column(String(100))
+    jupyterhub_size: Mapped[str | None] = mapped_column(String(20))   # 용량 타입 small/medium/large
     alloc_vcpu: Mapped[float | None] = mapped_column(Float)
     alloc_mem_gb: Mapped[float | None] = mapped_column(Float)
     alloc_gpu: Mapped[int | None] = mapped_column(Integer)

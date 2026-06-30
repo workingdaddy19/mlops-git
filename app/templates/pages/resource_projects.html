@@ -136,7 +136,7 @@
     <div class="modal-title">자원 신청</div>
     <div id="rq-proj" style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;"></div>
     <div class="form-group">
-      <label class="form-label">자원 프로파일(용량) *</label>
+      <label class="form-label">용량 타입 *</label>
       <select id="rq-profile" class="form-select" onchange="updateRqSpec()"></select>
     </div>
     <div id="rq-spec" style="font-size:12px; color:var(--text-secondary); margin:-8px 0 10px;">—</div>
@@ -319,10 +319,8 @@ async function openReqModal(projectId, code, name) {
     PROFILES = (res && res.ok) ? await res.json() : [];
   }
   const sel = document.getElementById('rq-profile');
-  sel.innerHTML = PROFILES.map(p => {
-    const spec = [p.vcpu != null ? `${p.vcpu} vCPU` : null, p.mem_gb != null ? `${p.mem_gb} GB` : null, p.gpu ? `GPU ${p.gpu}` : null].filter(Boolean).join(' / ');
-    return `<option value="${escapeAttr(p.server)}">${escapeHtml(p.name)}${spec ? ' · ' + spec : ''}</option>`;
-  }).join('');
+  sel.innerHTML = PROFILES.map(p =>
+    `<option value="${escapeAttr(p.size || p.server)}">${escapeHtml(p.name)}</option>`).join('');
   document.getElementById('rq-proj').textContent = `${code} · ${name}`;
   document.getElementById('rq-start').value = '';
   document.getElementById('rq-end').value = '';
@@ -334,9 +332,9 @@ async function openReqModal(projectId, code, name) {
 }
 function updateRqSpec() {
   const sv = document.getElementById('rq-profile').value;
-  const p = PROFILES.find(x => (x.server || '') === sv);
+  const p = PROFILES.find(x => (x.size || x.server || '') === sv);
   document.getElementById('rq-spec').textContent = p
-    ? `용량: ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB · GPU ${p.gpu ?? 0}`
+    ? `용량 타입: ${p.name} (참고 ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB${p.gpu ? ' · GPU '+p.gpu : ''})`
     : '용량 정보 없음';
 }
 function closeReqModal() { document.getElementById('reqModal').classList.remove('open'); }
@@ -347,11 +345,11 @@ async function submitRequest() {
   const profile = sel.value;
   const start = document.getElementById('rq-start').value;
   const end = document.getElementById('rq-end').value;
-  if (!sel.options.length) { alert('선택 가능한 자원 프로파일이 없습니다.'); return; }
+  if (!sel.options.length) { alert('선택 가능한 용량 타입이 없습니다.'); return; }
   if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
   if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
   const body = {
-    profile_server: profile,
+    size: profile,
     period_start: start,
     period_end: end,
     request_note: document.getElementById('rq-note').value.trim() || null,

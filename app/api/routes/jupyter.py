@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class TokenRequest(BaseModel):
     server: str = ""
+    size: str = ""        # 용량 타입 small/medium/large (JWT 클레임 jupyterhub_size로 전달)
 
 
 @router.get("/envs")
@@ -35,6 +36,7 @@ async def get_jupyter_envs(
 @router.get("/token")
 async def get_jupyter_token(
     server: str = Query(default="", description="Named server 이름 (비워두면 기본 서버)"),
+    size: str = Query(default="", description="용량 타입 small/medium/large → JWT 클레임 jupyterhub_size"),
     current_user: UserRead = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -48,10 +50,10 @@ async def get_jupyter_token(
     """
     svc = JupyterService(db=db)
     try:
-        result = await svc.get_token_url(current_user.username, server)
+        result = await svc.get_token_url(current_user.username, server, size)
         logger.info(
-            "token request  user=%-12s  server=%r  token_issued=%s  url=%s",
-            current_user.username, server or "(default)",
+            "token request  user=%-12s  server=%r  size=%r  token_issued=%s  url=%s",
+            current_user.username, server or "(default)", size or "(none)",
             result["token_issued"], result["url"],
         )
         # JupyterHub 5.x: token_issued는 서버 자동시작 확인용.
@@ -79,10 +81,10 @@ async def post_jupyter_token(
     """POST 방식 토큰 발급 — server는 request body에 담아 전송."""
     svc = JupyterService(db=db)
     try:
-        result = await svc.get_token_url(current_user.username, body.server)
+        result = await svc.get_token_url(current_user.username, body.server, body.size)
         logger.info(
-            "token request  user=%-12s  server=%r  token_issued=%s",
-            current_user.username, body.server or "(default)", result["token_issued"],
+            "token request  user=%-12s  server=%r  size=%r  token_issued=%s",
+            current_user.username, body.server or "(default)", body.size or "(none)", result["token_issued"],
         )
         return {
             "url":          result["url"],

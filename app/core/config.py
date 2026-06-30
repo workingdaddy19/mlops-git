@@ -34,9 +34,10 @@ class Settings(BaseSettings):
     jupyterhub_admin_token: str = Field(default="", alias="JUPYTERHUB_ADMIN_TOKEN")
     jupyterhub_jwt_secret: str = Field(default="", alias="JUPYTERHUB_JWT_SECRET")
     jupyter_envs: str = Field(
-        # 자원 프로파일 카탈로그 — 사양(vcpu/mem_gb/gpu)은 JupyterHub profile_list와 매칭(인프라 구성 전제).
-        default='[{"name":"CPU 환경","server":"","vcpu":4,"mem_gb":16,"gpu":0},'
-                '{"name":"GPU 환경","server":"gpu","vcpu":8,"mem_gb":32,"gpu":1}]',
+        # 용량 타입 카탈로그 — size(small/medium/large). 실제 sizing은 JupyterHub 프리셋(인프라), 포탈은 표시·한도검증.
+        default='[{"size":"small","name":"Small (2 vCPU/16GB)","server":"","vcpu":2,"mem_gb":16,"gpu":0},'
+                '{"size":"medium","name":"Medium (4 vCPU/32GB)","server":"","vcpu":4,"mem_gb":32,"gpu":0},'
+                '{"size":"large","name":"Large (6 vCPU/64GB)","server":"","vcpu":6,"mem_gb":64,"gpu":0}]',
         alias="JUPYTER_ENVS",
     )
 

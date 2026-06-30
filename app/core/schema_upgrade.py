@@ -19,6 +19,7 @@ _ADDED_COLUMNS = [
     ("resource_ledgers", "request_note", "VARCHAR(500)"),
     ("resource_ledgers", "assigned_to", "VARCHAR(50)"),
     ("resource_ledgers", "starts_at", "DATE"),
+    ("resource_ledgers", "jupyterhub_size", "VARCHAR(20)"),
     ("capacity_estimates", "status", "VARCHAR(20) NOT NULL DEFAULT 'pending'"),
 ]
 

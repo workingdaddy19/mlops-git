@@ -33,8 +33,10 @@ SETTINGS_SEED = [
     },
     {
         "key": "JUPYTER_ENVS",
-        "value": '[{"name":"CPU 환경","server":""},{"name":"GPU 환경","server":"gpu"}]',
-        "label": "Jupyter 환경 목록 (JSON)",
+        "value": '[{"size":"small","name":"Small (2 vCPU/16GB)","server":"","vcpu":2,"mem_gb":16,"gpu":0},'
+                 '{"size":"medium","name":"Medium (4 vCPU/32GB)","server":"","vcpu":4,"mem_gb":32,"gpu":0},'
+                 '{"size":"large","name":"Large (6 vCPU/64GB)","server":"","vcpu":6,"mem_gb":64,"gpu":0}]',
+        "label": "Jupyter 용량 타입 목록 (JSON)",
         "group": "jupyter",
     },
     {

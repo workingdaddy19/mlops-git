@@ -89,7 +89,7 @@
   <div class="modal-box" style="width:460px; max-width:95vw;">
     <div class="modal-title">자원 배분 신청</div>
     <div class="form-group"><label class="form-label">분석 과제 *</label><select id="rr-project" class="form-select" onchange="onRrProject()"></select></div>
-    <div class="form-group"><label class="form-label">자원 프로파일(용량) *</label><select id="rr-profile" class="form-select" onchange="updateRrSpec()"></select></div>
+    <div class="form-group"><label class="form-label">용량 타입 *</label><select id="rr-profile" class="form-select" onchange="updateRrSpec()"></select></div>
     <div id="rr-spec" style="font-size:12px; color:var(--text-secondary); margin:-8px 0 10px;">—</div>
     <div id="rr-cap" style="font-size:12px; padding:8px 12px; border-radius:6px; background:#f0fdfa; border:1px solid #99f6e4; margin-bottom:12px;">산정서 한도 확인 중...</div>
     <div style="display:flex; gap:10px;">
@@ -214,10 +214,8 @@ async function openResReqModal() {
   if (!projects.length) { showToast('등록된 분석 과제가 없습니다. 분석 과제를 먼저 등록하세요.', 'error'); return; }
   document.getElementById('rr-project').innerHTML = projects.map(p =>
     `<option value="${p.id}">${escapeHtml(p.code)} · ${escapeHtml(p.name)}</option>`).join('');
-  document.getElementById('rr-profile').innerHTML = RR_PROFILES.map(p => {
-    const spec = [p.vcpu!=null?`${p.vcpu} vCPU`:null, p.mem_gb!=null?`${p.mem_gb} GB`:null, p.gpu?`GPU ${p.gpu}`:null].filter(Boolean).join(' / ');
-    return `<option value="${escapeAttr(p.server)}">${escapeHtml(p.name)}${spec?' · '+spec:''}</option>`;
-  }).join('');
+  document.getElementById('rr-profile').innerHTML = RR_PROFILES.map(p =>
+    `<option value="${escapeAttr(p.size || p.server)}">${escapeHtml(p.name)}</option>`).join('');
   document.getElementById('rr-start').value = '';
   document.getElementById('rr-end').value = '';
   document.getElementById('rr-note').value = '';
@@ -237,9 +235,9 @@ function fillSampleResReq() {
 }
 function updateRrSpec() {
   const sv = document.getElementById('rr-profile').value;
-  const p = RR_PROFILES.find(x => (x.server || '') === sv);
+  const p = RR_PROFILES.find(x => (x.size || x.server || '') === sv);
   document.getElementById('rr-spec').textContent = p
-    ? `용량: ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB · GPU ${p.gpu ?? 0}`
+    ? `용량 타입: ${p.name} (참고 ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB${p.gpu ? ' · GPU '+p.gpu : ''})`
     : '용량 정보 없음';
 }
 function onRrProject() {
@@ -255,7 +253,7 @@ async function submitResReq() {
   if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
   if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
   const body = {
-    profile_server: document.getElementById('rr-profile').value,
+    size: document.getElementById('rr-profile').value,
     period_start: start, period_end: end,
     request_note: document.getElementById('rr-note').value.trim() || null,
   };

@@ -19,14 +19,16 @@ logger = logging.getLogger(__name__)
 class ResourceProfile(BaseModel):
     name: str
     server: str = ""
+    size: str | None = None          # 용량 타입 small/medium/large
     vcpu: float | None = None
     mem_gb: float | None = None
     gpu: int | None = None
 
 
 _DEFAULT: list[ResourceProfile] = [
-    ResourceProfile(name="CPU 환경", server="", vcpu=4, mem_gb=16, gpu=0),
-    ResourceProfile(name="GPU 환경", server="gpu", vcpu=8, mem_gb=32, gpu=1),
+    ResourceProfile(size="small",  name="Small (2 vCPU/16GB)",  server="", vcpu=2, mem_gb=16, gpu=0),
+    ResourceProfile(size="medium", name="Medium (4 vCPU/32GB)", server="", vcpu=4, mem_gb=32, gpu=0),
+    ResourceProfile(size="large",  name="Large (6 vCPU/64GB)",  server="", vcpu=6, mem_gb=64, gpu=0),
 ]
 
 
@@ -49,3 +51,9 @@ def load_profiles(db: Session | None = None) -> list[ResourceProfile]:
 def find_profile(profiles: list[ResourceProfile], server: str | None) -> ResourceProfile | None:
     target = server or ""
     return next((p for p in profiles if (p.server or "") == target), None)
+
+
+def find_profile_by_size(profiles: list[ResourceProfile], size: str | None) -> ResourceProfile | None:
+    if not size:
+        return None
+    return next((p for p in profiles if (p.size or "") == size), None)

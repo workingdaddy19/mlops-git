@@ -18,7 +18,7 @@ from app.schemas.resource import (
     CapacityEstimateCreate,
     ResourceLedgerRead,
 )
-from app.services.resource_profiles import find_profile, load_profiles
+from app.services.resource_profiles import find_profile, find_profile_by_size, load_profiles
 
 EXPIRY_SOON_DAYS = 14
 
@@ -219,12 +219,15 @@ class ResourceService:
             else:
                 access, days_to_start = "open", None
             proj = l.project
-            prof = find_profile(profiles, l.jupyter_server_type)
+            # 용량 타입(size) 우선 해석 → 라벨, 없으면 레거시 server 매칭
+            prof = find_profile_by_size(profiles, l.jupyterhub_size) or find_profile(profiles, l.jupyter_server_type)
             allocations.append({
                 "ledger_id": l.id,
                 "project_code": proj.code if proj else None,
                 "project_name": proj.name if proj else None,
                 "jupyter_server_type": l.jupyter_server_type,
+                "jupyterhub_size": l.jupyterhub_size,
+                "size_label": prof.name if prof else None,
                 "profile_name": prof.name if prof else None,
                 "alloc_vcpu": l.alloc_vcpu,
                 "alloc_mem_gb": l.alloc_mem_gb,

@@ -34,7 +34,7 @@ from app.schemas.resource import (
     ResourceLedgerUpdate,
     ResourceRequestCreate,
 )
-from app.services.resource_profiles import find_profile, load_profiles
+from app.services.resource_profiles import find_profile, find_profile_by_size, load_profiles
 from app.services.resource_service import ResourceService
 
 logger = logging.getLogger(__name__)
@@ -276,12 +276,13 @@ def create_resource_request(
     db: Session = Depends(get_db),
     current_user: UserRead = Depends(get_current_user),
 ):
-    """사용자 자원 신청 — 프로파일(용량)+기간(필수) → Ledger(submitted), 대상=신청자."""
+    """사용자 자원 신청 — 용량 타입(size)+기간(필수) → Ledger(submitted), 대상=신청자."""
     svc = ResourceService(db)
     profiles = load_profiles(db)
-    prof = find_profile(profiles, body.profile_server)  # server="" 도 유효(기본 CPU)
+    # size(우선) → 프로파일, 없으면 profile_server 하위호환
+    prof = find_profile_by_size(profiles, body.size) or find_profile(profiles, body.profile_server)
     if not prof:
-        raise HTTPException(status_code=400, detail="유효하지 않은 자원 프로파일입니다.")
+        raise HTTPException(status_code=400, detail="유효하지 않은 용량 타입입니다.")
     if body.period_start > body.period_end:
         raise HTTPException(status_code=400, detail="시작일이 종료일보다 늦을 수 없습니다.")
     # FR-6: 신청 시점 산정서 한도 검증
@@ -291,14 +292,14 @@ def create_resource_request(
         raise HTTPException(status_code=400, detail=str(e)) from e
     ledger = ResourceLedger(
         project_id=project.id, status="submitted",
-        jupyter_server_type=body.profile_server or None,
+        jupyterhub_size=prof.size, jupyter_server_type=prof.server or None,
         alloc_vcpu=prof.vcpu, alloc_mem_gb=prof.mem_gb, alloc_gpu=prof.gpu,
         assigned_to=current_user.username,          # 권한은 신청 사용자에게만
         starts_at=body.period_start, expires_at=body.period_end,
         request_note=body.request_note, recorded_by=current_user.username,
     )
     created = svc.repo.create_ledger(ledger)
-    logger.info("resource request: project=%s profile=%r by=%s", project.code, body.profile_server, current_user.username)
+    logger.info("resource request: project=%s size=%r by=%s", project.code, prof.size, current_user.username)
     return svc.to_ledger_read(created)
 
 

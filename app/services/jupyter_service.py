@@ -74,8 +74,11 @@ class JupyterService:
             for env in self.envs_config
         ]
 
-    async def get_token_url(self, username: str, server: str = "") -> dict:
+    async def get_token_url(self, username: str, server: str = "", size: str = "") -> dict:
         """버튼 클릭 시 토큰 발급 + 서버 자동 시작 → 접속 정보 반환.
+
+        size(small/medium/large)는 SSO JWT의 **jupyterhub_size 클레임**으로 동봉되어
+        JupyterHub(jwtauthenticator→spawner)가 프리셋 용량으로 스폰한다.
 
         JupyterHub 2.x 자동 로그인 흐름:
           1. Admin API → 사용자용 1시간 토큰 발급 (scope: access:servers!server=user/)
@@ -106,7 +109,9 @@ class JupyterService:
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(minutes=15)).timestamp()),
         }
-        
+        if size:
+            payload["jupyterhub_size"] = size   # 용량 타입 클레임 (small/medium/large)
+
         if not self.jwt_secret:
             # JWT 시크릿 미설정 시 빈 키 서명을 피하고, 토큰 없이 직접 접속 URL 반환
             logger.warning("JUPYTERHUB_JWT_SECRET 미설정 — SSO 토큰 생략, 직접 접속 URL 반환")
