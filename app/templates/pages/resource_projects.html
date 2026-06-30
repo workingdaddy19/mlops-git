@@ -123,6 +123,7 @@
     </div>
     <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">※ 자원은 등록 후 <strong>자원 신청</strong>으로 요청하고, 관리자 승인 후 배분됩니다.</p>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+      <button class="btn btn-secondary" style="margin-right:auto;" onclick="fillSampleProject()">🧪 샘플 입력</button>
       <button class="btn btn-secondary" onclick="closeCreateModal()">취소</button>
       <button class="btn btn-primary" onclick="submitCreate()">등록</button>
     </div>
@@ -156,6 +157,7 @@
     </div>
     <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 신청은 <strong>승인 대기</strong> 상태로 등록되며, 관리자 승인 후 Jupyter에서 사용할 수 있습니다.</p>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+      <button class="btn btn-secondary" style="margin-right:auto;" onclick="fillSampleReq()">🧪 샘플 입력</button>
       <button class="btn btn-secondary" onclick="closeReqModal()">취소</button>
       <button class="btn btn-primary" onclick="submitRequest()">신청</button>
     </div>
@@ -252,6 +254,29 @@ function openCreateModal() {
   document.getElementById('createModal').classList.add('open');
 }
 function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+// ── 샘플 입력 ──────────────────────────────────────────────────────────────
+function _ymdToday(addMonths) { const d = new Date(); if (addMonths) d.setMonth(d.getMonth() + addMonths); return d.toISOString().slice(0, 10); }
+function fillSampleProject() {
+  document.getElementById('f-name').value = '[샘플] 고객 이탈 예측 분석';
+  if (IS_ADMIN) document.getElementById('f-owner').value = '홍길동';
+  document.getElementById('f-code').value = '';
+  document.getElementById('f-member-count').value = '2';
+  document.getElementById('f-start').value = _ymdToday(0);
+  document.getElementById('f-end').value = _ymdToday(3);
+  document.getElementById('f-data-types').value = '거래로그, 고객마스터';
+  document.getElementById('f-datasets').value = 'athena.tx_log, s3://dw/cust';
+  document.getElementById('f-sec-status').value = 'requested';
+  document.getElementById('f-sec-date').value = _ymdToday(0);
+  document.getElementById('f-itsm').value = 'ITSM-SAMPLE-0001';
+  document.getElementById('f-purpose').value = '[샘플] 이탈 고객 사전 식별 모델 개발';
+}
+function fillSampleReq() {
+  const sel = document.getElementById('rq-profile'); if (sel.options.length) { sel.selectedIndex = 0; updateRqSpec(); }
+  document.getElementById('rq-start').value = _ymdToday(0);
+  document.getElementById('rq-end').value = _ymdToday(1);
+  document.getElementById('rq-note').value = '[샘플] 3개월 모델 학습용 자원 요청';
+}
 
 async function submitCreate() {
   const name = document.getElementById('f-name').value.trim();

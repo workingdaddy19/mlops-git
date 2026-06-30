@@ -1,3 +1,35 @@
+// ─── 모달 UX (바깥 클릭 닫힘 방지 + × 닫기 버튼 자동 주입) ────────────────────
+(function initModalsUX() {
+  // FR-1: 바깥(.modal-overlay) 클릭으로 닫히지 않도록 — 캡처 단계에서 페이지 핸들러 차단
+  document.addEventListener('click', function (e) {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('modal-overlay')) {
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
+  // FR-2: 모든 .modal-box 우측 상단에 × 닫기 버튼 주입
+  function injectCloseButtons() {
+    document.querySelectorAll('.modal-box').forEach(function (box) {
+      if (box.querySelector('.modal-close-x')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'modal-close-x';
+      btn.title = '닫기';
+      btn.setAttribute('aria-label', '닫기');
+      btn.textContent = '✕';
+      btn.addEventListener('click', function () {
+        const ov = box.closest('.modal-overlay');
+        if (ov) ov.classList.remove('open');
+      });
+      if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+      box.insertBefore(btn, box.firstChild);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectCloseButtons);
+  else injectCloseButtons();
+})();
+
 // ─── Auth ─────────────────────────────────────────────────────────────────
 const Auth = {
   getToken() { return localStorage.getItem('token'); },

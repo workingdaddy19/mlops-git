@@ -99,6 +99,7 @@
     <div class="form-group"><label class="form-label">신청 사유</label><textarea id="rr-note" class="form-input" rows="2" placeholder="예: 3개월 딥러닝 학습"></textarea></div>
     <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 신청은 <strong>승인 대기</strong>로 등록되며 관리자 승인 후 사용할 수 있습니다.</p>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
+      <button class="btn btn-secondary" style="margin-right:auto;" onclick="fillSampleResReq()">🧪 샘플 입력</button>
       <button class="btn btn-secondary" onclick="closeResReqModal()">취소</button>
       <button class="btn btn-primary" onclick="submitResReq()">신청</button>
     </div>
@@ -225,6 +226,15 @@ async function openResReqModal() {
   document.getElementById('resReqModal').classList.add('open');
 }
 function closeResReqModal() { document.getElementById('resReqModal').classList.remove('open'); }
+function fillSampleResReq() {
+  const ymd = (m) => { const d = new Date(); if (m) d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10); };
+  const ps = document.getElementById('rr-project'); if (ps.options.length) ps.selectedIndex = 0;
+  const sel = document.getElementById('rr-profile'); if (sel.options.length) { sel.selectedIndex = 0; updateRrSpec(); }
+  onRrProject();
+  document.getElementById('rr-start').value = ymd(0);
+  document.getElementById('rr-end').value = ymd(1);
+  document.getElementById('rr-note').value = '[샘플] 3개월 모델 학습용 자원 요청';
+}
 function updateRrSpec() {
   const sv = document.getElementById('rr-profile').value;
   const p = RR_PROFILES.find(x => (x.server || '') === sv);

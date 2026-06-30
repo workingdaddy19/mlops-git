@@ -411,6 +411,10 @@ body.sidebar-collapsed .sidebar-divider { margin: 6px 14px; }
 .member-picker .mp-opt small { color:var(--text-muted); }
 .member-picker .mp-empty { color:var(--text-muted); cursor:default; }
 
+/* ── 모달 닫기(×) 버튼 ─── */
+.modal-close-x { position:absolute; top:10px; right:12px; width:28px; height:28px; padding:0; border:none; background:transparent; color:var(--text-muted); font-size:17px; line-height:1; cursor:pointer; border-radius:6px; z-index:2; }
+.modal-close-x:hover { background:var(--bg-secondary,#f1f5f9); color:var(--text-primary); }
+
 /* ── Rail Tooltip (JS 위치 지정) ──────────────── */
 .rail-tooltip {
   position: fixed;
