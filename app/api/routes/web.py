@@ -10,6 +10,10 @@ from app.services.settings_service import SettingsService
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
 
+# 정적 자원 캐시버스팅 — 프로세스 시작 시각 기준(배포/재기동마다 갱신 → 브라우저 강제 재요청)
+import time as _time
+templates.env.globals["ASSET_VERSION"] = str(int(_time.time()))
+
 
 @router.get("/", include_in_schema=False)
 async def root():

@@ -8,7 +8,7 @@
   <!-- Favicon: AI 텍스트 SVG -->
   <link rel="icon" type="image/svg+xml"
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d9488'/%3E%3Ctext x='50%25' y='50%25' font-family='system-ui,sans-serif' font-size='11' font-weight='700' fill='white' text-anchor='middle' dominant-baseline='central'%3EAI%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/main.css?v={{ ASSET_VERSION }}">
 </head>
 
 <body data-page="{{ active_page }}">
@@ -175,7 +175,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v={{ ASSET_VERSION }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 
