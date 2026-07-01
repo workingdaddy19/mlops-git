@@ -6,7 +6,6 @@ JupyterHub 2.x RBAC scope 참고:
 """
 import json
 import logging
-from urllib.parse import quote, urljoin
 from datetime import datetime, timedelta, UTC
 import jwt  # PyJWT
 
@@ -75,34 +74,19 @@ class JupyterService:
         ]
 
     async def get_token_url(self, username: str, server: str = "", size: str = "") -> dict:
-        """버튼 클릭 시 토큰 발급 + 서버 자동 시작 → 접속 정보 반환.
+        """버튼 클릭 시 SSO JWT 발급 → JupyterHub 접속 URL 반환.
 
-        size(small/medium/large)는 SSO JWT의 **jupyterhub_size 클레임**으로 동봉되어
-        JupyterHub(jwtauthenticator→spawner)가 프리셋 용량으로 스폰한다.
-
-        JupyterHub 2.x 자동 로그인 흐름:
-          1. Admin API → 사용자용 1시간 토큰 발급 (scope: access:servers!server=user/)
-          2. 서버 구동 확인 및 시작
-          3. URL 에 ?token={hub_api_token} 포함 → 브라우저가 열면 Hub가 즉시 인증
+        JupyterHub jwtauthenticator가 ``/hub/login?token=<JWT>`` 의 token을
+        get_argument("token")으로 읽어 로그인하고, spawner가 payload의
+        ``jupyterhub_size`` 클레임으로 프리셋 용량을 스폰한다.
+        → payload 자체가 인증정보이므로 admin API 토큰 발급/서버 선시작은 불필요
+          (로그인 후 Hub가 자동 스폰). 로컬 실증 확인(2026-07-01).
 
         Returns:
-          url          - ?token= 포함된 JupyterLab URL
-          token_issued - 발급 성공 여부
-          error        - 실패 사유 (성공 시 "")
+          url   - ?token=<JWT> 포함된 JupyterHub 로그인 URL
+          error - 실패 사유 (성공 시 "")
         """
-        token, error = await self._issue_user_token(username, server)
-
-        # 서버 자동 시작 (토큰 발급 성공 여부와 무관하게 시도)
-        await self._ensure_server_running(username, server)
-
-        if server:
-            lab_path = f"/user/{username}/{server}/lab"
-        else:
-            lab_path = f"/user/{username}/lab"
-
-        # JWT 생성 (jupyterhub-jwtauthenticator 호환)
-        # iat 포함 필수: jwtauthenticator가 발급시각 기준 검증에 사용
-        # 유효기간 15분: 서버 간 clock skew(~수 분) 허용
+        # SSO JWT payload — iat: jwtauthenticator 발급시각 검증 / exp 15분: clock skew 허용
         now = datetime.now(UTC)
         payload = {
             "username": username,
@@ -112,29 +96,22 @@ class JupyterService:
         if size:
             payload["jupyterhub_size"] = size   # 용량 타입 클레임 (small/medium/large)
 
-        if not self.jwt_secret:
-            # JWT 시크릿 미설정 시 빈 키 서명을 피하고, 토큰 없이 직접 접속 URL 반환
-            logger.warning("JUPYTERHUB_JWT_SECRET 미설정 — SSO 토큰 생략, 직접 접속 URL 반환")
-            lab_url = f"{self.base_url}{lab_path}"
-        else:
-            try:
-                sso_jwt = jwt.encode(payload, self.jwt_secret, algorithm="HS256")
-                # 기존 운영에서 정상 동작하던 구조 유지: 토큰을 next 경로 안에 포함.
-                #   /hub/login?next=/user/{username}/lab?token={jwt}
-                # payload에는 jupyterhub_size 클레임이 포함된다(용량 타입 전달).
-                next_with_token = quote(f"{lab_path}?token={sso_jwt}", safe="")
-                lab_url = f"{self.base_url}/hub/login?next={next_with_token}"
-            except Exception as e:
-                logger.error("Failed to generate JWT: %s", e)
-                lab_url = f"{self.base_url}{lab_path}"
+        def _direct_lab_url() -> str:
+            lab_path = f"/user/{username}/{server}/lab" if server else f"/user/{username}/lab"
+            return f"{self.base_url}{lab_path}"
 
-        return {
-            "url":          lab_url,
-            "token_issued": bool(token),
-            "error":        error if not token else "",
-            # 서버가 정상 시작됐으면 직접 접속 가능
-            "server_ready": True,
-        }
+        if not self.jwt_secret:
+            logger.warning("JUPYTERHUB_JWT_SECRET 미설정 — SSO 토큰 생략, 직접 접속 URL 반환")
+            return {"url": _direct_lab_url(), "error": "JWT 시크릿 미설정"}
+
+        try:
+            sso_jwt = jwt.encode(payload, self.jwt_secret, algorithm="HS256")
+        except Exception as e:
+            logger.error("Failed to generate JWT: %s", e)
+            return {"url": _direct_lab_url(), "error": str(e)}
+
+        # jwtauthenticator가 top-level token을 읽어 로그인 → spawner가 클레임으로 프리셋 스폰
+        return {"url": f"{self.base_url}/hub/login?token={sso_jwt}", "error": ""}
 
     async def get_hub_stats(self) -> dict:
         """JupyterHub 사용자/서버 현황."""
@@ -195,104 +172,6 @@ class JupyterService:
             return f"{self.base_url}/user/{username}/{server}/lab"
         return f"{self.base_url}/user/{username}/lab"
 
-    # ──────────────────────────────────────────
-    # Internal helpers
-    # ──────────────────────────────────────────
-
-    async def _issue_user_token(self, username: str, server: str = "") -> tuple[str, str]:
-        """JupyterHub Admin API로 사용자 토큰 발급 (1시간).
-
-        scopes를 명시하지 않으면 JupyterHub가 해당 사용자의 기본 scope를 자동 부여.
-        (admin 토큰의 scope 범위 밖의 scope를 명시하면 403 오류 발생)
-
-        Returns:
-            (token, error) — 성공: (token, ""),  실패: ("", 오류메시지)
-        """
-        if not self.admin_token:
-            return "", "JUPYTERHUB_ADMIN_TOKEN 미설정"
-
-        # scopes 미지정 → JupyterHub가 해당 사용자의 적합한 scope를 자동 부여
-        # (명시 시 admin 토큰 scope 범위 검증으로 403 발생 가능)
-        payload: dict = {
-            "note":       "mlfoundry-auto",
-            "expires_in": 3600,
-        }
-
-        logger.info(
-            "issuing token  user=%-12s  server=%r  (scopes auto-assigned by JupyterHub)",
-            username, server or "(default)",
-        )
-
-        try:
-            async with self._http_client() as client:
-                resp = await client.post(
-                    f"{self.base_url}/hub/api/users/{username}/tokens",
-                    headers={
-                        "Authorization": f"token {self.admin_token}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
-
-            logger.info(
-                "token API response  user=%-12s  status=%d  body=%s",
-                username, resp.status_code, resp.text[:300],
-            )
-
-            if resp.status_code in (200, 201):
-                body  = resp.json()
-                token = body.get("token", "")
-                if token:
-                    logger.info(
-                        "token issued OK  user=%-12s  granted_scopes=%s",
-                        username, body.get("scopes", []),
-                    )
-                    return token, ""
-                return "", "API 응답에 token 필드 없음"
-
-            # 403: 권한 부족
-            if resp.status_code == 403:
-                return "", (
-                    f"JupyterHub 권한 오류 (HTTP 403): "
-                    f"JUPYTERHUB_ADMIN_TOKEN으로 '{username}' 토큰 발급이 거부됐습니다. "
-                    f"응답: {resp.text[:200]}"
-                )
-
-            # 404: JupyterHub에 해당 사용자 없음
-            if resp.status_code == 404:
-                return "", f"JupyterHub에 사용자 '{username}' 없음 (먼저 JupyterHub에서 로그인 1회 필요)"
-
-            return "", f"HTTP {resp.status_code}: {resp.text[:200]}"
-
-        except httpx.ConnectError as exc:
-            msg = f"JupyterHub 연결 실패 ({self.base_url}): {exc}"
-            logger.error(msg)
-            return "", msg
-        except Exception as exc:
-            logger.error("token issuance error user=%s: %s", username, exc)
-            return "", str(exc)
-
-    async def _ensure_server_running(self, username: str, server: str = "") -> int:
-        """서버 자동 시작 요청. 반환: HTTP 상태코드."""
-        if not self.admin_token:
-            return 0
-        try:
-            if server:
-                url = f"{self.base_url}/hub/api/users/{username}/servers/{server}"
-            else:
-                url = f"{self.base_url}/hub/api/users/{username}/server"
-
-            async with self._http_client() as client:
-                resp = await client.post(
-                    url,
-                    headers={"Authorization": f"token {self.admin_token}"},
-                )
-            # 201=already running, 202=starting, 400=bad request
-            logger.info(
-                "server start  user=%-12s  server=%r  status=%d",
-                username, server or "(default)", resp.status_code,
-            )
-            return resp.status_code
-        except Exception as exc:
-            logger.warning("server start failed user=%s: %s", username, exc)
-            return 0
+    # admin_token은 get_hub_stats/validate_token/check_health(관리자 조회)에서만 사용.
+    # 사용자 접속(get_token_url)은 SSO JWT(top-level token)만으로 로그인·스폰되므로
+    # 별도 admin API 토큰 발급/서버 선시작 헬퍼는 두지 않는다.

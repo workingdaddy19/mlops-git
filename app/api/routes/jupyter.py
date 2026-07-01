@@ -40,30 +40,25 @@ async def get_jupyter_token(
     current_user: UserRead = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """버튼 클릭 → 토큰 발급 → 접속 URL 반환.
+    """버튼 클릭 → SSO JWT 발급 → 접속 URL 반환.
 
     응답:
-      url          : 새 탭으로 열어야 할 JupyterLab URL (토큰 포함)
-      token_issued : 토큰 발급 성공 여부 (false면 로그인 페이지로 이동될 수 있음)
-      error        : 실패 사유 (성공 시 null)
-      username     : 접속 대상 JupyterHub 사용자명
+      url      : 새 탭으로 열어야 할 JupyterHub 로그인 URL (?token=<JWT>)
+      error    : 실패 사유 (성공 시 null)
+      username : 접속 대상 JupyterHub 사용자명
     """
     svc = JupyterService(db=db)
     try:
         result = await svc.get_token_url(current_user.username, server, size)
         logger.info(
-            "token request  user=%-12s  server=%r  size=%r  token_issued=%s  url=%s",
-            current_user.username, server or "(default)", size or "(none)",
-            result["token_issued"], result["url"],
+            "token request  user=%-12s  server=%r  size=%r  url=%s",
+            current_user.username, server or "(default)", size or "(none)", result["url"],
         )
-        # JupyterHub 5.x: token_issued는 서버 자동시작 확인용.
-        # 브라우저 접속은 항상 직접 lab URL로 이동 (세션 쿠키로 인증).
         return {
-            "url":          result["url"],
-            "token_issued": result["token_issued"],
-            "error":        result.get("error") or None,
-            "username":     current_user.username,
-            "server":       server,
+            "url":      result["url"],
+            "error":    result.get("error") or None,
+            "username": current_user.username,
+            "server":   server,
         }
     except HTTPException:
         raise
@@ -83,15 +78,14 @@ async def post_jupyter_token(
     try:
         result = await svc.get_token_url(current_user.username, body.server, body.size)
         logger.info(
-            "token request  user=%-12s  server=%r  size=%r  token_issued=%s",
-            current_user.username, body.server or "(default)", body.size or "(none)", result["token_issued"],
+            "token request  user=%-12s  server=%r  size=%r",
+            current_user.username, body.server or "(default)", body.size or "(none)",
         )
         return {
-            "url":          result["url"],
-            "token_issued": result["token_issued"],
-            "error":        result.get("error") or None,
-            "username":     current_user.username,
-            "server":       body.server,
+            "url":      result["url"],
+            "error":    result.get("error") or None,
+            "username": current_user.username,
+            "server":   body.server,
         }
     except HTTPException:
         raise
