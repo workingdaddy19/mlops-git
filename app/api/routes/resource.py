@@ -285,15 +285,16 @@ def create_resource_request(
         raise HTTPException(status_code=400, detail="유효하지 않은 용량 타입입니다.")
     if body.period_start > body.period_end:
         raise HTTPException(status_code=400, detail="시작일이 종료일보다 늦을 수 없습니다.")
-    # FR-6: 신청 시점 산정서 한도 검증
+    # 멤버 1인 1회(동시 1건) 검증 — 산정서 한도 개념은 오토스케일링 전제로 제거됨
     try:
-        svc.assert_request_capacity(project.id, prof.vcpu, prof.mem_gb)
+        svc.assert_member_single_request(project.id, current_user.username)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     ledger = ResourceLedger(
         project_id=project.id, status="submitted",
         jupyterhub_size=prof.size, jupyter_server_type=prof.server or None,
         alloc_vcpu=prof.vcpu, alloc_mem_gb=prof.mem_gb, alloc_gpu=prof.gpu,
+        est_vcpu=body.est_vcpu, est_mem_gb=body.est_mem_gb, basis_note=body.basis_note,
         assigned_to=current_user.username,          # 권한은 신청 사용자에게만
         starts_at=body.period_start, expires_at=body.period_end,
         request_note=body.request_note, recorded_by=current_user.username,
@@ -316,11 +317,7 @@ def create_ledger(
         raise HTTPException(status_code=403, detail="자원 배분 직접 등록은 관리자만 가능합니다. 사용자는 '자원 신청'을 이용하세요.")
     svc = ResourceService(db)
     data = body.model_dump()
-    # FR-6: 등록 시점 산정서 한도 검증
-    try:
-        svc.assert_request_capacity(project.id, data.get("alloc_vcpu"), data.get("alloc_mem_gb"))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    # 오토스케일링 전제 — 산정서 한도 검증 없이 직접 등록(승인 단계에서 admin이 스펙 확정)
     ledger = ResourceLedger(project_id=project.id, status="draft", recorded_by=current_user.username, **data)
     created = svc.repo.create_ledger(ledger)
     return svc.to_ledger_read(created)
@@ -340,24 +337,7 @@ def update_ledger(
         if ledger.status not in ("draft", "submitted"):
             raise HTTPException(status_code=403, detail="승인 단계 이후에는 수정할 수 없습니다.")
     data = body.model_dump(exclude_unset=True)
-
-    if "alloc_vcpu" in data or "alloc_mem_gb" in data:
-        new_vcpu = data.get("alloc_vcpu", ledger.alloc_vcpu)
-        new_mem = data.get("alloc_mem_gb", ledger.alloc_mem_gb)
-        cap = svc.remaining_capacity(ledger.project_id)
-        if cap["has_approved_estimate"]:
-            used_v = cap["used_vcpu"]
-            used_m = cap["used_mem"]
-            if ledger.status in ("approved", "active"):
-                used_v -= (ledger.alloc_vcpu or 0)
-                used_m -= (ledger.alloc_mem_gb or 0)
-            remain_v = cap["peak_vcpu"] - used_v
-            remain_m = cap["peak_mem"] - used_m
-            if new_vcpu is not None and cap["peak_vcpu"] and new_vcpu > remain_v + 1e-9:
-                raise HTTPException(status_code=400, detail=f"vCPU 한도 초과 — 남은 {round(remain_v, 2)} vCPU (요청 {new_vcpu})")
-            if new_mem is not None and cap["peak_mem"] and new_mem > remain_m + 1e-9:
-                raise HTTPException(status_code=400, detail=f"메모리 한도 초과 — 남은 {round(remain_m, 2)} GB (요청 {new_mem})")
-
+    # 오토스케일링 전제 — 산정서 한도 검증 제거(승인 단계에서 admin이 최종 스펙 확정)
     for field, value in data.items():
         setattr(ledger, field, value)
     svc.repo.save()
@@ -433,15 +413,6 @@ def my_ledgers(
 ):
     """본인 과제들의 전체 자원 대장(라이프사이클). 기간 필터(created_at)."""
     return ResourceService(db).my_ledgers(current_user, parse_date(date_from), parse_date(date_to))
-
-
-@router.get("/projects/{project_id}/capacity")
-def project_capacity(
-    project: AnalysisProject = Depends(get_owned_project),
-    db: Session = Depends(get_db),
-):
-    """승인된 산정서 한도 + 잔여 용량 (폼 표시·검증용, 본인/admin)."""
-    return ResourceService(db).remaining_capacity(project.id)
 
 
 # ═══════════════════════════════════════════ Dashboard / Reclaim / 승인큐 ═══

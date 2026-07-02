@@ -196,12 +196,30 @@ function renderCapBanner(el, cap) {
   el.style.background = '#f0fdfa'; el.style.borderColor = '#99f6e4';
 }
 async function loadCapBanner(projectId, elId) {
+  // 오토스케일링 전제 — '산정서 한도' 개념 제거(/capacity 폐지). 배너 숨김(하위 템플릿 호환 no-op).
   const el = document.getElementById(elId);
-  if (el) el.innerHTML = '산정서 한도 확인 중...';
-  try {
-    const res = await apiFetch(`/api/resource/projects/${projectId}/capacity`);
-    renderCapBanner(el, (res && res.ok) ? await res.json() : null);
-  } catch { renderCapBanner(el, null); }
+  if (el) el.style.display = 'none';
+}
+
+// ─── 클릭 복사(ITSM 가이드 등 <pre> 텍스트 → 클립보드 + 토스트) ──────────────
+function copyPre(preId, toastId) {
+  const pre = document.getElementById(preId);
+  if (!pre) return;
+  const text = pre.textContent || '';
+  const done = () => {
+    const t = document.getElementById(toastId);
+    if (t) { t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 1800); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => { _fallbackCopy(text); done(); });
+  } else { _fallbackCopy(text); done(); }
+}
+function _fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch { /* ignore */ }
+  ta.remove();
 }
 
 // ─── Sidebar toggle / 폭 ───────────────────────────────────────────────────

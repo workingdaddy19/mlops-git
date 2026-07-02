@@ -27,6 +27,20 @@ class ResourceService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = ResourceRepository(db)
+        self._profiles_cache = None  # 요청 수명 내 프로파일 캐시(대시보드 size_label N+1 방지)
+
+    def _profiles(self):
+        if self._profiles_cache is None:
+            self._profiles_cache = load_profiles(self.db)
+        return self._profiles_cache
+
+    def _names_for(self, usernames) -> dict[str, str]:
+        """사번 목록 → {사번: 성명} 일괄 조회(N+1 방지)."""
+        ids = sorted({u for u in usernames if u})
+        if not ids:
+            return {}
+        from app.repositories.user_repo import UserRepository
+        return {u.username: (u.name or "") for u in UserRepository(self.db).get_by_usernames(ids)}
 
     # ── Project ─────────────────────────────────────────────────────────────
     def generate_code(self) -> str:
@@ -119,17 +133,22 @@ class ResourceService:
         return read
 
     # ── 공통: ledger → 과제명·신청자 포함 dict ───────────────────────────────
-    def _ledger_row(self, l: ResourceLedger) -> dict:
+    def _ledger_row(self, l: ResourceLedger, name_map: dict[str, str] | None = None) -> dict:
         d = self.to_ledger_read(l).model_dump(mode="json")
         d["project_name"] = l.project.name if l.project else None
         d["project_code"] = l.project.code if l.project else None
         d["requester"] = l.recorded_by   # 신청자 = 요청 작성자
+        d["assigned_to"] = l.assigned_to
+        d["assignee_name"] = (name_map or {}).get(l.assigned_to or "", "")
+        prof = find_profile_by_size(self._profiles(), l.jupyterhub_size)
+        d["size_label"] = prof.name if prof else (l.jupyterhub_size or "")
         return d
 
     # ── 대시보드 ─────────────────────────────────────────────────────────────
     def dashboard(self) -> dict:
         active = self.repo.list_ledgers_by_statuses(("active",))
-        rows = [self._ledger_row(l) for l in active]
+        name_map = self._names_for([l.assigned_to for l in active])
+        rows = [self._ledger_row(l, name_map) for l in active]
         expiring = [r for r in rows if r["expiry_state"] == "soon"]
         overdue = [r for r in rows if r["expiry_state"] == "overdue"]
 
@@ -174,34 +193,20 @@ class ResourceService:
         return self.repo.list_projects_for_user(
             user.username, (user.name or "").strip() or None, dt_from, dt_to)
 
-    # ── FR-6 산정서 잔여 한도 ───────────────────────────────────────────────
-    def remaining_capacity(self, project_id: int) -> dict:
-        """승인된 산정서 Peak − (approved+active 배분 합계) = 남은 한도."""
-        proj = self.repo.get_project(project_id)
-        approved = next((e for e in (proj.estimates if proj else []) if e.status == "approved"), None)
-        if not approved:
-            return {"has_approved_estimate": False, "peak_vcpu": 0, "peak_mem": 0,
-                    "used_vcpu": 0, "used_mem": 0, "remain_vcpu": 0, "remain_mem": 0}
-        peak_v = approved.derived_peak_vcpu or 0
-        peak_m = approved.derived_peak_memory_gb or 0
-        used_v = sum((l.alloc_vcpu or 0) for l in proj.ledgers if l.status in ("approved", "active"))
-        used_m = sum((l.alloc_mem_gb or 0) for l in proj.ledgers if l.status in ("approved", "active"))
-        return {
-            "has_approved_estimate": True,
-            "peak_vcpu": peak_v, "peak_mem": peak_m,
-            "used_vcpu": round(used_v, 2), "used_mem": round(used_m, 2),
-            "remain_vcpu": round(peak_v - used_v, 2), "remain_mem": round(peak_m - used_m, 2),
-        }
+    # ── 멤버 1인 1회(동시 1건) 신청 제한 ──────────────────────────────────────
+    def assert_member_single_request(self, project_id: int, username: str) -> None:
+        """멤버당 진행중(submitted/approved/active·만료 전) 신청이 있으면 차단.
 
-    def assert_request_capacity(self, project_id: int, vcpu, mem) -> None:
-        """신청/등록 시점 한도 검증 — 승인 산정서 필수 + 단건이 남은 한도 이내."""
-        cap = self.remaining_capacity(project_id)
-        if not cap["has_approved_estimate"]:
-            raise ValueError("승인된 용량 산정서가 없습니다. 산정서 작성·승인 후 신청하세요.")
-        if vcpu is not None and cap["peak_vcpu"] and vcpu > cap["remain_vcpu"] + 1e-9:
-            raise ValueError(f"vCPU 한도 초과 — 남은 {cap['remain_vcpu']} vCPU (요청 {vcpu})")
-        if mem is not None and cap["peak_mem"] and mem > cap["remain_mem"] + 1e-9:
-            raise ValueError(f"메모리 한도 초과 — 남은 {cap['remain_mem']} GB (요청 {mem})")
+        오토스케일링 전제로 '산정서 한도' 개념은 제거. 대신 멤버당 동시 1건만 허용
+        (회수·만료 후 재신청 가능).
+        """
+        today = date.today()
+        proj = self.repo.get_project(project_id)
+        for l in (proj.ledgers if proj else []):
+            if l.assigned_to != username:
+                continue
+            if l.status in ("submitted", "approved", "active") and (l.expires_at is None or l.expires_at >= today):
+                raise ValueError("이미 진행 중인 분석기 신청이 있습니다. 회수·만료 후 다시 신청하세요.")
 
     def my_allocations(self, user: UserRead) -> dict:
         """본인(assigned_to)에게 부여된 active 할당 + 시작일 접근게이팅 + 합계 + 프로파일."""
@@ -267,7 +272,7 @@ class ResourceService:
         return est
 
     def assert_allocatable(self, ledger: ResourceLedger) -> None:
-        """자원 배분 승인/활성 전 검증 — 필수값 + 승인된 산정서 + 총용량 한도."""
+        """자원 배분 승인/활성 전 검증 — 필수값만(오토스케일링: 산정서 한도 검증 제거)."""
         if ledger.alloc_vcpu is None or ledger.alloc_mem_gb is None:
             raise ValueError("vCPU·메모리 용량을 입력하세요.")
         if not ledger.assigned_to:
@@ -276,18 +281,6 @@ class ResourceService:
             raise ValueError("시작일과 만료일을 지정하세요.")
         if ledger.starts_at > ledger.expires_at:
             raise ValueError("시작일이 만료일보다 늦을 수 없습니다.")
-        proj = self.repo.get_project(ledger.project_id)
-        approved = next((e for e in (proj.estimates if proj else []) if e.status == "approved"), None)
-        if not approved:
-            raise ValueError("승인된 산정서가 없습니다. 먼저 용량 산정서를 승인하세요.")
-        peak_v = approved.derived_peak_vcpu or 0
-        peak_m = approved.derived_peak_memory_gb or 0
-        used_v = sum((l.alloc_vcpu or 0) for l in proj.ledgers if l.status in ("approved", "active") and l.id != ledger.id)
-        used_m = sum((l.alloc_mem_gb or 0) for l in proj.ledgers if l.status in ("approved", "active") and l.id != ledger.id)
-        if peak_v and (used_v + (ledger.alloc_vcpu or 0)) > peak_v + 1e-9:
-            raise ValueError(f"vCPU 배분 합계 {round(used_v + ledger.alloc_vcpu, 2)}가 산정서 한도 {peak_v}를 초과합니다.")
-        if peak_m and (used_m + (ledger.alloc_mem_gb or 0)) > peak_m + 1e-9:
-            raise ValueError(f"메모리 배분 합계 {round(used_m + ledger.alloc_mem_gb, 2)}GB가 산정서 한도 {peak_m}GB를 초과합니다.")
 
     def my_ledgers(self, user: UserRead, dt_from=None, dt_to=None) -> list[dict]:
         """본인 과제들의 전체 자원 대장(라이프사이클) + 과제명/만료/접근상태."""

@@ -101,6 +101,9 @@ class ResourceRequestCreate(BaseModel):
     period_start: date                # 사용 시작일(필수)
     period_end: date                  # 사용 종료(만료)일(필수)
     request_note: str | None = None   # 신청 사유
+    est_vcpu: float | None = None     # 예상 vCPU(산정 근거)
+    est_mem_gb: float | None = None   # 예상 메모리 GB(산정 근거)
+    basis_note: str | None = None     # 산정 근거 메모
 
 
 class ResourceLedgerRead(BaseModel):
@@ -123,6 +126,9 @@ class ResourceLedgerRead(BaseModel):
     reclaim_reason: str | None = None
     recorded_by: str | None = None
     request_note: str | None = None
+    est_vcpu: float | None = None
+    est_mem_gb: float | None = None
+    basis_note: str | None = None
     # 파생(만료 임박/경과) — 서비스에서 채움
     days_to_expiry: int | None = None
     expiry_state: str | None = None  # ok / soon / overdue / none

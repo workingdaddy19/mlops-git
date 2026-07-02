@@ -13,7 +13,7 @@
 
 <!-- 요약 카드 -->
 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin:12px 0 18px;">
-  <div class="card" style="text-align:center;"><div style="font-size:12px;color:var(--text-muted);">활성 자원</div><div id="c-active" style="font-size:28px;font-weight:700;color:#0d9488;">-</div></div>
+  <div class="card" style="text-align:center; cursor:pointer;" onclick="openAllocList()" title="클릭 시 배분 현황 보기"><div style="font-size:12px;color:var(--text-muted);">활성 자원 <span style="font-size:10px;color:var(--primary);font-weight:600;">▸ 목록</span></div><div id="c-active" style="font-size:28px;font-weight:700;color:#0d9488;">-</div></div>
   <div class="card" style="text-align:center;"><div style="font-size:12px;color:var(--text-muted);">만료 임박 (D-14)</div><div id="c-soon" style="font-size:28px;font-weight:700;color:#d97706;">-</div></div>
   <div class="card" style="text-align:center;"><div style="font-size:12px;color:var(--text-muted);">만료 경과 (회수대상)</div><div id="c-over" style="font-size:28px;font-weight:700;color:#dc2626;">-</div></div>
   <div class="card" style="text-align:center;"><div style="font-size:12px;color:var(--text-muted);">활성 용량 합계</div><div id="c-cap" style="font-size:17px;font-weight:700;margin-top:6px;">-</div></div>
@@ -50,6 +50,8 @@
     <div class="modal-title">자원 신청 승인 — 최종 배분 확정</div>
     <div id="ap-proj" style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;"></div>
     <div id="ap-limit" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
+    <div class="form-group"><label class="form-label">용량 타입(선택 시 vCPU/메모리 자동 채움)</label>
+      <select id="ap-size" class="form-select" onchange="applyApSize()"></select></div>
     <div style="display:flex; gap:10px;">
       <div class="form-group" style="flex:1;"><label class="form-label">vCPU *</label><input id="ap-vcpu" class="form-input" type="number" step="0.5"></div>
       <div class="form-group" style="flex:1;"><label class="form-label">메모리(GB) *</label><input id="ap-mem" class="form-input" type="number" step="1"></div>
@@ -64,10 +66,23 @@
       <div class="form-group" style="flex:1;"><label class="form-label">만료일 *</label><input id="ap-expires" class="form-input" type="date"></div>
     </div>
     <div class="form-group"><label class="form-label">ITSM 티켓</label><input id="ap-itsm" class="form-input" placeholder="예: ITSM-12345"></div>
-    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 승인된 산정서 한도 내에서만 확정됩니다. 확정 시 <strong>active</strong>로 전환되어 <strong>대상 사용자</strong>의 Jupyter에 노출됩니다.</p>
+    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 신청 근거를 참고해 최종 용량을 <strong>조정·확정</strong>하세요. 확정 시 <strong>active</strong>로 전환되어 <strong>대상 사용자</strong>의 Jupyter에 노출됩니다. (오토스케일링 — 산정서 한도 없음)</p>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
       <button class="btn btn-secondary" onclick="closeApprove()">취소</button>
       <button class="btn btn-primary" onclick="submitApprove()">승인 확정</button>
+    </div>
+  </div>
+</div>
+
+<!-- 활성 자원 배분 현황 모달 (활성 자원 카드 클릭) -->
+<div class="modal-overlay" id="allocModal">
+  <div class="modal-box" style="width:780px; max-width:96vw; max-height:88vh; overflow-y:auto;">
+    <div class="modal-title">🗂️ 활성 자원 배분 현황 (<span id="al-count">0</span>)</div>
+    <div style="overflow-x:auto;"><table class="data-table"><thead>
+      <tr><th>과제</th><th style="width:180px;">대상자</th><th style="width:110px;">용량</th><th style="width:180px;">사용 기간</th><th style="width:90px;">만료</th></tr>
+    </thead><tbody id="al-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">-</td></tr></tbody></table></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+      <button class="btn btn-secondary" onclick="closeAllocList()">닫기</button>
     </div>
   </div>
 </div>
@@ -76,6 +91,8 @@
 {% block scripts %}
 <script>
 let REQ_MAP = {};
+let ACTIVE_ROWS = [];   // 활성 자원 배분 현황 팝업용 (dashboard active rows)
+let AP_PROFILES = [];   // 승인 모달 용량 타입 셀렉트용
 const overPager = makePager(5, (s) => renderRows('over-tbody', s, true), 'over-pager');
 const soonPager = makePager(5, (s) => renderRows('soon-tbody', s, false), 'soon-pager');
 const reqPager = makePager(5, renderReqRows, 'req-pager');
@@ -87,6 +104,7 @@ async function load() {
   if (!res) return;
   if (res.status === 403) { document.getElementById('over-tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:16px;">⛔ 관리자 권한이 필요합니다.</td></tr>'; return; }
   const d = await res.json();
+  ACTIVE_ROWS = d.active || [];
   document.getElementById('c-active').textContent = d.active_count;
   document.getElementById('c-soon').textContent = d.expiring_count;
   document.getElementById('c-over').textContent = d.overdue_count;
@@ -96,6 +114,36 @@ async function load() {
   overPager.set(d.overdue || []);
   soonPager.set(d.expiring || []);
 }
+
+// ── 활성 자원 배분 현황 팝업 ────────────────────────────────────────────────
+function openAllocList() {
+  const tbody = document.getElementById('al-tbody');
+  document.getElementById('al-count').textContent = ACTIVE_ROWS.length;
+  if (!ACTIVE_ROWS.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">활성 배분 자원이 없습니다.</td></tr>`;
+  } else {
+    tbody.innerHTML = ACTIVE_ROWS.map(l => {
+      const who = l.assignee_name
+        ? `${escapeHtml(l.assignee_name)} <span style="color:var(--text-muted);font-family:monospace;">(${escapeHtml(l.assigned_to||'')})</span>`
+        : escapeHtml(l.assigned_to || '-');
+      const size = escapeHtml(l.size_label || l.jupyterhub_size || '-');
+      const period = `${l.starts_at || '?'} ~ ${l.expires_at || '?'}`;
+      const d = l.days_to_expiry;
+      const exp = (d == null) ? '-'
+        : (l.expiry_state === 'overdue' ? `<span style="color:#dc2626;font-weight:600;">${Math.abs(d)}일 경과</span>`
+        : (l.expiry_state === 'soon' ? `<span style="color:#d97706;font-weight:600;">D-${d}</span>` : `D-${d}`));
+      return `<tr>
+        <td style="font-size:12px;"><a href="/resource/projects/${l.project_id}" style="font-weight:600;">${escapeHtml(l.project_name||('과제 #'+l.project_id))}</a><br><span style="color:var(--text-muted);font-family:monospace;">${escapeHtml(l.project_code||'')}</span></td>
+        <td style="font-size:12px;">${who}</td>
+        <td style="font-size:12px;">${size}</td>
+        <td style="font-size:12px;">${period}</td>
+        <td style="font-size:12px;">${exp}</td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('allocModal').classList.add('open');
+}
+function closeAllocList() { document.getElementById('allocModal').classList.remove('open'); }
 
 // ── 자원 신청 승인 대기 ────────────────────────────────────────────────────
 async function loadRequests() {
@@ -128,10 +176,37 @@ function renderReqRows(list) {
   }).join('');
 }
 
-function openApprove(id) {
+async function ensureApProfiles() {
+  if (!AP_PROFILES.length) {
+    const res = await apiFetch('/api/resource/profiles');
+    AP_PROFILES = (res && res.ok) ? await res.json() : [];
+  }
+}
+function applyApSize() {
+  const p = AP_PROFILES.find(x => (x.size || '') === document.getElementById('ap-size').value);
+  if (!p) return;
+  document.getElementById('ap-vcpu').value = p.vcpu ?? '';
+  document.getElementById('ap-mem').value = p.mem_gb ?? '';
+  document.getElementById('ap-gpu').value = p.gpu ?? 0;
+  document.getElementById('ap-server').value = p.server || '';
+}
+async function openApprove(id) {
   const r = REQ_MAP[id]; if (!r) return;
+  await ensureApProfiles();
   document.getElementById('ap-proj').textContent = `${r.project_code||''} · ${r.project_name||''} · 신청자 ${r.requester||''}`;
-  document.getElementById('ap-limit').textContent = '※ 승인된 산정서의 총 용량 한도 내에서 입력하세요. (한도 초과 시 승인 거부)';
+  // 신청 근거(예상 사양 + 근거메모)를 참고용으로 표시
+  const est = [];
+  if (r.est_vcpu != null) est.push(`예상 ${fmtNum(r.est_vcpu)} vCPU`);
+  if (r.est_mem_gb != null) est.push(`${fmtNum(r.est_mem_gb)} GB`);
+  document.getElementById('ap-limit').innerHTML = (est.length || r.basis_note)
+    ? `📝 신청 근거: <b>${escapeHtml(est.join(' / ') || '-')}</b>${r.basis_note ? ' · ' + escapeHtml(r.basis_note) : ''}`
+    : '※ 신청 근거를 참고해 최종 용량을 조정·확정하세요.';
+  // 용량 타입 셀렉트 — 신청 size로 기본 선택(없으면 첫 size). Jupyter 실행에 필수
+  const apSizes = AP_PROFILES.filter(p => p.size);
+  document.getElementById('ap-size').innerHTML =
+    '<option value="">(용량 타입 선택)</option>' +
+    apSizes.map(p => `<option value="${escapeHtml(p.size)}">${escapeHtml(p.name)}</option>`).join('');
+  document.getElementById('ap-size').value = r.jupyterhub_size || (apSizes[0] ? apSizes[0].size : '');
   document.getElementById('ap-vcpu').value = r.alloc_vcpu ?? '';
   document.getElementById('ap-mem').value = r.alloc_mem_gb ?? '';
   document.getElementById('ap-gpu').value = r.alloc_gpu ?? '';
@@ -152,12 +227,15 @@ async function submitApprove() {
   const assigned = document.getElementById('ap-assigned').value.trim();
   const starts = document.getElementById('ap-starts').value;
   const expires = document.getElementById('ap-expires').value;
+  const size = document.getElementById('ap-size').value;
   if (!assigned) { return showToast('대상 사용자를 입력하세요.', 'error'); }
   if (!starts || !expires) { return showToast('시작일과 만료일은 필수입니다.', 'error'); }
+  if (!size) { return showToast('용량 타입을 선택하세요. (Jupyter 실행에 필요)', 'error'); }
   const body = {
     alloc_vcpu: num(document.getElementById('ap-vcpu').value),
     alloc_mem_gb: num(document.getElementById('ap-mem').value),
     alloc_gpu: num(document.getElementById('ap-gpu').value),
+    jupyterhub_size: size,
     assigned_to: assigned,
     jupyter_server_type: document.getElementById('ap-server').value.trim() || null,
     starts_at: starts,

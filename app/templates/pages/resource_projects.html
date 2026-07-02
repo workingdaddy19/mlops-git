@@ -130,39 +130,6 @@
   </div>
 </div>
 
-<!-- 자원 신청 모달 -->
-<div class="modal-overlay" id="reqModal">
-  <div class="modal-box" style="width:460px; max-width:95vw;">
-    <div class="modal-title">자원 신청</div>
-    <div id="rq-proj" style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;"></div>
-    <div class="form-group">
-      <label class="form-label">용량 타입 *</label>
-      <select id="rq-profile" class="form-select" onchange="updateRqSpec()"></select>
-    </div>
-    <div id="rq-spec" style="font-size:12px; color:var(--text-secondary); margin:-8px 0 10px;">—</div>
-    <div id="rq-cap" style="font-size:12px; padding:8px 12px; border-radius:6px; background:#f0fdfa; border:1px solid #99f6e4; margin-bottom:12px;">산정서 한도 확인 중...</div>
-    <div style="display:flex; gap:10px;">
-      <div class="form-group" style="flex:1;">
-        <label class="form-label">사용 시작일 *</label>
-        <input id="rq-start" class="form-input" type="date">
-      </div>
-      <div class="form-group" style="flex:1;">
-        <label class="form-label">사용 종료일 *</label>
-        <input id="rq-end" class="form-input" type="date">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">신청 사유</label>
-      <textarea id="rq-note" class="form-input" rows="2" placeholder="예: 3개월 딥러닝 학습, 야간 배치"></textarea>
-    </div>
-    <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">※ 신청은 <strong>승인 대기</strong> 상태로 등록되며, 관리자 승인 후 Jupyter에서 사용할 수 있습니다.</p>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px;">
-      <button class="btn btn-secondary" style="margin-right:auto;" onclick="fillSampleReq()">🧪 샘플 입력</button>
-      <button class="btn btn-secondary" onclick="closeReqModal()">취소</button>
-      <button class="btn btn-primary" onclick="submitRequest()">신청</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -173,7 +140,6 @@ const PROJ_STATUS = {
   completed: { text:'완료', bg:'#e2e8f0', fg:'#475569' },
 };
 let IS_ADMIN = false;
-let PROFILES = [];
 
 const projPager = makePager(5, renderProjectRows, 'proj-pager');
 
@@ -226,10 +192,8 @@ function renderProjectRows(items) {
     const delBtn = (IS_ADMIN && p.status === 'planning')
       ? `<button class="btn btn-danger" style="padding:4px 10px;font-size:12px;margin-left:4px;" onclick="deleteProject(${p.id},'${escapeAttr(p.code)}')">삭제</button>`
       : '';
-    const actions = IS_ADMIN
-      ? `<a class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" href="/resource/projects/${p.id}">상세</a>${delBtn}`
-      : `<a class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" href="/resource/projects/${p.id}">상세</a>
-         <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;margin-left:4px;" onclick="openReqModal(${p.id},'${escapeAttr(p.code)}','${escapeAttr(p.name)}')">자원 신청</button>`;
+    // 자원 신청은 상세 화면(입력폼·산정근거·ITSM 가이드 완비)으로 일원화 — 리스트에선 '상세'만
+    const actions = `<a class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" href="/resource/projects/${p.id}">상세</a>${IS_ADMIN ? delBtn : ''}`;
     return `
       <tr>
         <td><a href="/resource/projects/${p.id}" style="font-family:monospace; font-size:12px; color:var(--primary); font-weight:600;">${escapeHtml(p.code)}</a></td>
@@ -271,13 +235,6 @@ function fillSampleProject() {
   document.getElementById('f-itsm').value = 'ITSM-SAMPLE-0001';
   document.getElementById('f-purpose').value = '[샘플] 이탈 고객 사전 식별 모델 개발';
 }
-function fillSampleReq() {
-  const sel = document.getElementById('rq-profile'); if (sel.options.length) { sel.selectedIndex = 0; updateRqSpec(); }
-  document.getElementById('rq-start').value = _ymdToday(0);
-  document.getElementById('rq-end').value = _ymdToday(1);
-  document.getElementById('rq-note').value = '[샘플] 3개월 모델 학습용 자원 요청';
-}
-
 async function submitCreate() {
   const name = document.getElementById('f-name').value.trim();
   const u = Auth.getUser();
@@ -309,59 +266,6 @@ async function submitCreate() {
   } else {
     const err = await res.json().catch(() => ({}));
     showToast(err.detail || '등록 실패', 'error');
-  }
-}
-
-// ── 자원 신청 ──────────────────────────────────────────────────────────────
-async function openReqModal(projectId, code, name) {
-  if (!PROFILES.length) {
-    const res = await apiFetch('/api/resource/profiles');
-    PROFILES = (res && res.ok) ? await res.json() : [];
-  }
-  const sel = document.getElementById('rq-profile');
-  sel.innerHTML = PROFILES.map(p =>
-    `<option value="${escapeAttr(p.size || p.server)}">${escapeHtml(p.name)}</option>`).join('');
-  document.getElementById('rq-proj').textContent = `${code} · ${name}`;
-  document.getElementById('rq-start').value = '';
-  document.getElementById('rq-end').value = '';
-  document.getElementById('rq-note').value = '';
-  updateRqSpec();
-  loadCapBanner(projectId, 'rq-cap');
-  document.getElementById('reqModal').dataset.projectId = projectId;
-  document.getElementById('reqModal').classList.add('open');
-}
-function updateRqSpec() {
-  const sv = document.getElementById('rq-profile').value;
-  const p = PROFILES.find(x => (x.size || x.server || '') === sv);
-  document.getElementById('rq-spec').textContent = p
-    ? `용량 타입: ${p.name} (참고 ${p.vcpu ?? '-'} vCPU · ${p.mem_gb ?? '-'} GB${p.gpu ? ' · GPU '+p.gpu : ''})`
-    : '용량 정보 없음';
-}
-function closeReqModal() { document.getElementById('reqModal').classList.remove('open'); }
-
-async function submitRequest() {
-  const id = document.getElementById('reqModal').dataset.projectId;
-  const sel = document.getElementById('rq-profile');
-  const profile = sel.value;
-  const start = document.getElementById('rq-start').value;
-  const end = document.getElementById('rq-end').value;
-  if (!sel.options.length) { alert('선택 가능한 용량 타입이 없습니다.'); return; }
-  if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
-  if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
-  const body = {
-    size: profile,
-    period_start: start,
-    period_end: end,
-    request_note: document.getElementById('rq-note').value.trim() || null,
-  };
-  const res = await apiFetch(`/api/resource/projects/${id}/resource-request`, { method:'POST', body: JSON.stringify(body) });
-  if (!res) return;
-  if (res.ok) {
-    closeReqModal();
-    showToast('자원 신청이 접수되었습니다. 관리자 승인을 기다려 주세요.', 'success');
-  } else {
-    const err = await res.json().catch(() => ({}));
-    showToast(err.detail || '신청 실패', 'error');
   }
 }
 
