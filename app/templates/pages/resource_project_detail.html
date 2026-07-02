@@ -142,6 +142,13 @@
       Peak 메모리: <strong id="pk-mem">-</strong> GB · Peak vCPU: <strong id="pk-vcpu">-</strong>
       <span style="color:var(--text-muted); font-size:11px;">(예상 사양 = 산정 근거로 저장, 승인 시 조정)</span>
     </div>
+    <div class="form-group" style="margin-top:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <label class="form-label" style="margin:0;">용량 산정 정의 <span style="font-weight:400; color:var(--text-muted);">(워크시트 기반 자동 작성 · 수정 가능 · ITSM 기타에 활용)</span></label>
+        <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="rrGenBasis(true)">🔄 워크시트에서 자동 작성</button>
+      </div>
+      <textarea id="rr-basis" class="form-input" rows="4" oninput="rrBasisDirty=true" placeholder="위 워크시트를 채우면 산정 정의가 자동 작성됩니다. (직접 수정 가능)"></textarea>
+    </div>
     <div style="display:flex; gap:10px; margin-top:10px;">
       <div class="form-group" style="flex:1;"><label class="form-label">사용 시작일 *</label><input id="rr-start" class="form-input" type="date"></div>
       <div class="form-group" style="flex:1;"><label class="form-label">사용 종료일 *</label><input id="rr-end" class="form-input" type="date"></div>
@@ -294,17 +301,23 @@
       resolveUsernames(memberCsv).then(map => { msEl.textContent = fmt(ids.map(id => map[id] || id)); });
     }
 
-    // ITSM 분석기 신청 가이드 — 과제명/기간 반영
+    // ITSM 분석기 신청 가이드 — 과제명/기간 + 최근 신청의 산정 정의(basis_note) 반영
     const itsmEl = document.getElementById('itsm-jupyter-text');
     if (itsmEl) {
+      const lg = (p.ledgers || []).find(l => l.basis_note || l.est_vcpu || l.est_mem_gb) || {};
+      const specLine = (lg.est_vcpu || lg.est_mem_gb)
+        ? `분석기(Jupyter) ${lg.est_vcpu ?? '-'} vCPU / ${lg.est_mem_gb ?? '-'} GB 메모리`
+        : '분석기(Jupyter) 4 vCPU / 32 GB 메모리';
+      const etc = lg.basis_note
+        ? lg.basis_note.split('\n').map(x => '   ' + x).join('\n')
+        : '   - 데이터 : 2억건 상당의 데이터 전처리·조인 작업 등 예상 32 GB 메모리 수준\n   - 모델 : 모델 학습·생성 연산작업에 4 vCPU 수준';
       itsmEl.textContent =
 `ITSM 제목 : [AIA] AI 분석기(Jupyter) 자원 생성 신청
 1) 사유 : ${p.name || ''} 분석기(Jupyter) 사용
-2) 생성 신청 : 분석기(Jupyter) 4 vCPU / 32 GB 메모리
+2) 생성 신청 : ${specLine}
 3) 기간 : ${p.period_start || ''}~${p.period_end || ''}
 4) 기타 (자원 용량 산정 근거) :
-   - 데이터 : 2억건 상당의 데이터 전처리·조인 작업 등 예상 32 GB 메모리 수준
-   - 모델 : 모델 학습·생성 연산작업에 4 vCPU 수준`;
+${etc}`;
     }
     renderLedgers(p.ledgers || []);
   }
@@ -446,6 +459,7 @@
     };
     set(trs[0], '데이터 전처리·조인', '2억건', '전처리/조인 중 임시객체 burst', 2, 32);
     set(trs[1], '모델 학습·생성', '학습셋', '연산 병렬', 4, 0);
+    rrBasisDirty = false;   // 샘플은 자동 산정 정의로 채움
     recalcPeak();
     document.getElementById('rr-note').value = '테스트과제 분석기(Jupyter) 사용';
   }
@@ -453,9 +467,9 @@
   function addStepRow() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-    <td><input class="form-input s-op" style="padding:3px 6px;font-size:12px;" placeholder="예: groupby"></td>
-    <td><input class="form-input s-scale" style="padding:3px 6px;font-size:12px;" placeholder="2.1억행"></td>
-    <td><input class="form-input s-rat" style="padding:3px 6px;font-size:12px;" placeholder="임시객체 burst"></td>
+    <td><input class="form-input s-op" style="padding:3px 6px;font-size:12px;" placeholder="예: groupby" oninput="recalcPeak()"></td>
+    <td><input class="form-input s-scale" style="padding:3px 6px;font-size:12px;" placeholder="2.1억행" oninput="recalcPeak()"></td>
+    <td><input class="form-input s-rat" style="padding:3px 6px;font-size:12px;" placeholder="임시객체 burst" oninput="recalcPeak()"></td>
     <td><input class="form-input s-vcpu" type="number" step="0.5" style="padding:3px 6px;font-size:12px;" oninput="recalcPeak()"></td>
     <td><input class="form-input s-mem" type="number" step="0.5" style="padding:3px 6px;font-size:12px;" oninput="recalcPeak()"></td>
     <td><button class="btn btn-danger" style="padding:2px 7px;font-size:11px;" onclick="this.closest('tr').remove();recalcPeak()">×</button></td>`;
@@ -478,6 +492,27 @@
     steps.forEach(s => { cum += (s.mem_delta_gb || 0); peak = Math.max(peak, cum); if (s.vcpu != null) vcpus.push(s.vcpu); });
     document.getElementById('pk-mem').textContent = steps.length ? peak.toFixed(1) : '-';
     document.getElementById('pk-vcpu').textContent = vcpus.length ? Math.max(...vcpus) : '-';
+    rrSyncBasis();  // 워크시트 변경 시 산정 정의 자동 갱신(사용자 수정 전까지)
+  }
+
+  // ── 용량 산정 정의(워크시트 → 텍스트, 수정 가능 · ITSM 기타 활용) ─────────
+  let rrBasisDirty = false;   // 사용자가 직접 수정하면 자동 갱신 중단
+  function rrBuildBasis() {
+    const steps = collectSteps();
+    if (!steps.length) return '';
+    let cum = 0, peakMem = 0; const vcpus = [];
+    steps.forEach(s => { cum += (s.mem_delta_gb || 0); peakMem = Math.max(peakMem, cum); if (s.vcpu != null) vcpus.push(s.vcpu); });
+    const pv = vcpus.length ? Math.max(...vcpus) : '-';
+    const lines = steps.map(s => `- ${s.operation}${s.data_scale ? ` (${s.data_scale})` : ''}${s.rationale ? ` : ${s.rationale}` : ''} → 메모리Δ ${s.mem_delta_gb ?? '-'}GB, vCPU ${s.vcpu ?? '-'}`);
+    return `[용량 산정] Peak 메모리 ${peakMem.toFixed(1)} GB · Peak vCPU ${pv}\n${lines.join('\n')}`;
+  }
+  function rrSyncBasis() {
+    const el = document.getElementById('rr-basis');
+    if (el && !rrBasisDirty) el.value = rrBuildBasis();
+  }
+  function rrGenBasis(force) {           // 🔄 버튼: 강제 재작성
+    if (force) rrBasisDirty = false;
+    rrSyncBasis();
   }
 
   // ── 자원대장 모달 ─────────────────────────────────────────────
@@ -522,6 +557,8 @@
     document.getElementById('rr-end').value = '';
     document.getElementById('rr-note').value = '';
     document.getElementById('step-rows').innerHTML = '';   // 산정 워크시트 초기화
+    rrBasisDirty = false;
+    document.getElementById('rr-basis').value = '';
     addStepRow(); addStepRow();
     recalcPeak();
     updateRrSpec();
@@ -540,20 +577,17 @@
     const end = document.getElementById('rr-end').value;
     if (!start || !end) { alert('사용 시작일과 종료일은 필수입니다.'); return; }
     if (start > end) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
-    // 산정 워크시트 → Peak(예상 vCPU/메모리) + 근거 텍스트 직렬화
+    // 산정 워크시트 → Peak(예상 vCPU/메모리). basis_note는 편집 가능한 '용량 산정 정의' 텍스트 사용
     const steps = collectSteps();
     let cum = 0, peakMem = 0; const vcpus = [];
     steps.forEach(s => { cum += (s.mem_delta_gb || 0); peakMem = Math.max(peakMem, cum); if (s.vcpu != null) vcpus.push(s.vcpu); });
-    const basis = steps.map(s =>
-      `- ${s.operation}${s.data_scale ? ` (${s.data_scale})` : ''}${s.rationale ? ` : ${s.rationale}` : ''} → vCPU ${s.vcpu ?? '-'}, 메모리Δ ${s.mem_delta_gb ?? '-'}GB`
-    ).join('\n');
     const body = {
       size: document.getElementById('rr-profile').value,
       period_start: start, period_end: end,
       request_note: document.getElementById('rr-note').value.trim() || null,
       est_vcpu: vcpus.length ? Math.max(...vcpus) : null,
       est_mem_gb: peakMem || null,
-      basis_note: basis || null,
+      basis_note: document.getElementById('rr-basis').value.trim() || null,
     };
     const res = await apiFetch(`/api/resource/projects/${PROJECT_ID}/resource-request`, { method: 'POST', body: JSON.stringify(body) });
     if (!res) return;
